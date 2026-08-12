@@ -384,7 +384,8 @@ function startRecording(){
   recBorder.classList.add('on');
   timerEl.classList.add('on');
   stopBtn.classList.add('on');
-  startSpeechRecognition();
+  micNote.textContent = recognitionActive ? '🎙 אמרו "סטופ" לסיום ההקלטה' : (micNote.textContent || 'עצירה קולית לא זמינה — השתמשו בכפתור');
+  micNote.classList.add('on');
 }
 
 function recordFrame(lm, w, h){
@@ -418,18 +419,17 @@ function stopRecording(reason){
   recBorder.classList.remove('on');
   timerEl.classList.remove('on');
   stopBtn.classList.remove('on');
-  stopSpeechRecognition();
+  micNote.classList.remove('on');
   beep(320,220,0.25);
   setState('תוצאות');
   showResults();
 }
 
-// ---------- Speech recognition ----------
-function startSpeechRecognition(){
+// ---------- Speech recognition (persistent — started once, listens throughout the session) ----------
+function startPersistentRecognition(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SR){
     micNote.textContent = 'עצירה קולית לא נתמכת בדפדפן זה — השתמשו בכפתור';
-    micNote.classList.add('on');
     return;
   }
   try{
@@ -438,28 +438,30 @@ function startSpeechRecognition(){
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.onresult = (e)=>{
+      if(phase !== 'recording') return;
       for(let i=e.resultIndex;i<e.results.length;i++){
         const txt = e.results[i][0].transcript.trim();
-        if(/עצור|עצרי|עצרו|סטופ|stop|סיים|סיימתי|די/.test(txt)){
+        if(/עצור|עצרי|עצרו|סטופ|stop|סיים|סיימתי|^די$/i.test(txt)){
           stopRecording('voice');
         }
       }
     };
-    recognition.onerror = ()=>{};
-    recognition.onend = ()=>{ if(recognitionActive && phase==='recording'){ try{recognition.start();}catch(e){} } };
+    recognition.onerror = (e)=>{
+      if(e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+        recognitionActive = false;
+        micNote.textContent = 'הרשאת מיקרופון נדחתה — השתמשו בכפתור לעצירה';
+        micNote.classList.add('on');
+      }
+      // 'no-speech' / 'aborted' and similar are routine — onend will restart it
+    };
+    recognition.onend = ()=>{
+      if(recognitionActive){ try{ recognition.start(); }catch(e){} }
+    };
     recognition.start();
     recognitionActive = true;
-    micNote.textContent = '🎙 אמרו "סטופ" לסיום ההקלטה';
-    micNote.classList.add('on');
   }catch(e){
     micNote.textContent = 'עצירה קולית לא זמינה — השתמשו בכפתור';
-    micNote.classList.add('on');
   }
-}
-function stopSpeechRecognition(){
-  recognitionActive = false;
-  micNote.classList.remove('on');
-  if(recognition){ try{recognition.stop();}catch(e){} recognition=null; }
 }
 
 stopBtn.addEventListener('click', ()=> stopRecording('manual'));
@@ -804,6 +806,8 @@ async function init(mode){
   phase = 'calibrate';
   setState('כיול');
   requestAnimationFrame(detectLoop);
+
+  if(!recognitionActive) startPersistentRecognition();
 }
 
 async function startWith(mode){
