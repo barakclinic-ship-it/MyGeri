@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MyGeri v1.7 — מעקב מסלול בעיטות</title>
+<title>MyGeri v1.8 — מעקב מסלול בעיטות</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTAwIDEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIgZmlsbD0iIzEyMTIxMiIvPgogIDxnIHN0cm9rZT0iI0VERTdEQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIGZpbGw9Im5vbmUiPgogICAgPGxpbmUgeDE9IjUwIiB5MT0iMzQiIHgyPSI1MCIgeTI9IjYwIi8+CiAgICA8bGluZSB4MT0iNTAiIHkxPSIzNCIgeDI9IjM3IiB5Mj0iMzciLz4KICAgIDxsaW5lIHgxPSI1MCIgeTE9IjM0IiB4Mj0iNjMiIHkyPSIzNyIvPgogICAgPGxpbmUgeDE9IjM3IiB5MT0iMzciIHgyPSIzMCIgeTI9IjUyIi8+CiAgICA8bGluZSB4MT0iMzAiIHkxPSI1MiIgeDI9IjM1IiB5Mj0iNjYiLz4KICAgIDxsaW5lIHgxPSI2MyIgeTE9IjM3IiB4Mj0iNzAiIHkyPSI1MiIvPgogICAgPGxpbmUgeDE9IjcwIiB5MT0iNTIiIHgyPSI2NSIgeTI9IjY2Ii8+CiAgICA8bGluZSB4MT0iNTAiIHkxPSI2MCIgeDI9IjI3IiB5Mj0iNjUiLz4KICAgIDxsaW5lIHgxPSIyNyIgeTE9IjY1IiB4Mj0iNTgiIHkyPSI3NiIvPgogICAgPGxpbmUgeDE9IjUwIiB5MT0iNjAiIHgyPSI3MyIgeTI9IjY1Ii8+CiAgICA8bGluZSB4MT0iNzMiIHkxPSI2NSIgeDI9IjQyIiB5Mj0iNzYiLz4KICA8L2c+CiAgPGNpcmNsZSBjeD0iNTAiIGN5PSIyMiIgcj0iOSIgZmlsbD0iI0VERTdEQSIvPgogIDxjaXJjbGUgY3g9IjUwIiBjeT0iMjIiIHI9IjkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0M5QTIyNyIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPGcgZmlsbD0iI0M5QTIyNyI+CiAgICA8Y2lyY2xlIGN4PSIzNyIgY3k9IjM3IiByPSIyLjYiLz48Y2lyY2xlIGN4PSI2MyIgY3k9IjM3IiByPSIyLjYiLz4KICAgIDxjaXJjbGUgY3g9IjMwIiBjeT0iNTIiIHI9IjIuNiIvPjxjaXJjbGUgY3g9IjcwIiBjeT0iNTIiIHI9IjIuNiIvPgogICAgPGNpcmNsZSBjeD0iMzUiIGN5PSI2NiIgcj0iMi42Ii8+PGNpcmNsZSBjeD0iNjUiIGN5PSI2NiIgcj0iMi42Ii8+CiAgICA8Y2lyY2xlIGN4PSIyNyIgY3k9IjY1IiByPSIyLjYiLz48Y2lyY2xlIGN4PSI3MyIgY3k9IjY1IiByPSIyLjYiLz4KICAgIDxjaXJjbGUgY3g9IjU4IiBjeT0iNzYiIHI9IjIuNiIvPjxjaXJjbGUgY3g9IjQyIiBjeT0iNzYiIHI9IjIuNiIvPgogICAgPGNpcmNsZSBjeD0iNTAiIGN5PSI2MCIgcj0iMi42Ii8+CiAgPC9nPgo8L3N2Zz4K">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -177,6 +178,40 @@
   .jointChip .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
   .jointChip.off{opacity:.35;}
 
+  #dataSheetBtn{
+    display:block; margin:12px auto 0; width:44px; height:44px; border-radius:50%;
+    background:var(--ink); color:var(--paper); border:none; font-family:'JetBrains Mono',monospace;
+    font-size:18px; font-weight:700;
+  }
+
+  #dataSheetOverlay{
+    position:fixed; inset:0; background:rgba(10,10,10,0.5); z-index:55;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  #dataSheetOverlay.show{ display:flex; }
+  .sheetCard{
+    background:var(--paper); width:100%; max-width:480px; border-radius:20px 20px 0 0;
+    padding:20px 20px 28px; max-height:70vh; overflow-y:auto;
+  }
+  .sheetCard h2{ font-size:17px; margin:0 0 4px; font-weight:800; }
+  .sheetCard .sheetSub{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted); margin-bottom:14px; }
+  .sheetRow{
+    display:flex; align-items:center; gap:10px; padding:10px 0;
+    border-top:1px solid rgba(18,18,18,0.08);
+  }
+  .sheetRow .dot{ width:11px; height:11px; border-radius:50%; flex-shrink:0; }
+  .sheetRow .label{ font-weight:700; font-size:14px; min-width:76px; }
+  .sheetRow .val{ font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--ink); opacity:.8; }
+  .sheetEmpty{ font-size:13px; color:var(--muted); padding:14px 0; }
+  #sheetShareBtn{
+    display:block; width:100%; margin-top:16px; background:var(--gold); color:var(--ink);
+    border:none; border-radius:24px; padding:13px; font-family:'Heebo'; font-size:15px; font-weight:700;
+  }
+  #sheetCloseBtn{
+    display:block; width:100%; margin-top:8px; background:none; color:var(--ink);
+    border:1px solid rgba(18,18,18,0.2); border-radius:24px; padding:11px; font-family:'Heebo'; font-size:14px;
+  }
+
   #stats{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:rgba(18,18,18,.1);
     margin:18px 16px; border-radius:14px; overflow:hidden;}
   .stat{background:var(--paper); padding:14px 16px;}
@@ -274,10 +309,21 @@
   </div>
   <div id="trajWrap"><canvas id="trajCanvas"></canvas></div>
   <div id="jointLegend"></div>
+  <button id="dataSheetBtn">#</button>
   <div id="stats"></div>
   <div id="norm"></div>
   <div id="sessionGallery"></div>
   <button id="retryBtn">בעיטה נוספת</button>
+</div>
+
+<div id="dataSheetOverlay">
+  <div class="sheetCard">
+    <h2 id="sheetHeader">נתוני בעיטה</h2>
+    <div class="sheetSub" id="sheetSub"></div>
+    <div id="sheetRows"></div>
+    <button id="sheetShareBtn">📤 שתפו בוואטסאפ</button>
+    <button id="sheetCloseBtn">סגור</button>
+  </div>
 </div>
 
 <div id="lightbox">
@@ -287,7 +333,8 @@
 </div>
 
 <div id="permOverlay">
-  <h1>MyGeri <span class="mono" style="font-size:10px; opacity:.5;">v1.7</span></h1>
+  <img src="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTAwIDEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIgZmlsbD0iIzEyMTIxMiIvPgogIDxnIHN0cm9rZT0iI0VERTdEQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIGZpbGw9Im5vbmUiPgogICAgPGxpbmUgeDE9IjUwIiB5MT0iMzQiIHgyPSI1MCIgeTI9IjYwIi8+CiAgICA8bGluZSB4MT0iNTAiIHkxPSIzNCIgeDI9IjM3IiB5Mj0iMzciLz4KICAgIDxsaW5lIHgxPSI1MCIgeTE9IjM0IiB4Mj0iNjMiIHkyPSIzNyIvPgogICAgPGxpbmUgeDE9IjM3IiB5MT0iMzciIHgyPSIzMCIgeTI9IjUyIi8+CiAgICA8bGluZSB4MT0iMzAiIHkxPSI1MiIgeDI9IjM1IiB5Mj0iNjYiLz4KICAgIDxsaW5lIHgxPSI2MyIgeTE9IjM3IiB4Mj0iNzAiIHkyPSI1MiIvPgogICAgPGxpbmUgeDE9IjcwIiB5MT0iNTIiIHgyPSI2NSIgeTI9IjY2Ii8+CiAgICA8bGluZSB4MT0iNTAiIHkxPSI2MCIgeDI9IjI3IiB5Mj0iNjUiLz4KICAgIDxsaW5lIHgxPSIyNyIgeTE9IjY1IiB4Mj0iNTgiIHkyPSI3NiIvPgogICAgPGxpbmUgeDE9IjUwIiB5MT0iNjAiIHgyPSI3MyIgeTI9IjY1Ii8+CiAgICA8bGluZSB4MT0iNzMiIHkxPSI2NSIgeDI9IjQyIiB5Mj0iNzYiLz4KICA8L2c+CiAgPGNpcmNsZSBjeD0iNTAiIGN5PSIyMiIgcj0iOSIgZmlsbD0iI0VERTdEQSIvPgogIDxjaXJjbGUgY3g9IjUwIiBjeT0iMjIiIHI9IjkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0M5QTIyNyIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPGcgZmlsbD0iI0M5QTIyNyI+CiAgICA8Y2lyY2xlIGN4PSIzNyIgY3k9IjM3IiByPSIyLjYiLz48Y2lyY2xlIGN4PSI2MyIgY3k9IjM3IiByPSIyLjYiLz4KICAgIDxjaXJjbGUgY3g9IjMwIiBjeT0iNTIiIHI9IjIuNiIvPjxjaXJjbGUgY3g9IjcwIiBjeT0iNTIiIHI9IjIuNiIvPgogICAgPGNpcmNsZSBjeD0iMzUiIGN5PSI2NiIgcj0iMi42Ii8+PGNpcmNsZSBjeD0iNjUiIGN5PSI2NiIgcj0iMi42Ii8+CiAgICA8Y2lyY2xlIGN4PSIyNyIgY3k9IjY1IiByPSIyLjYiLz48Y2lyY2xlIGN4PSI3MyIgY3k9IjY1IiByPSIyLjYiLz4KICAgIDxjaXJjbGUgY3g9IjU4IiBjeT0iNzYiIHI9IjIuNiIvPjxjaXJjbGUgY3g9IjQyIiBjeT0iNzYiIHI9IjIuNiIvPgogICAgPGNpcmNsZSBjeD0iNTAiIGN5PSI2MCIgcj0iMi42Ii8+CiAgPC9nPgo8L3N2Zz4K" alt="MyGeri" style="width:76px;height:76px;">
+  <h1>MyGeri <span class="mono" style="font-size:10px; opacity:.5;">v1.8</span></h1>
   <p style="margin-top:-10px; font-size:15px; color:var(--paper); opacity:.75;">מעקב מסלול בעיטות</p>
   <p>נדרשת גישה למצלמה (לזיהוי שלד) ולמיקרופון (לעצירה קולית ב"עצור"). עמדו בפרופיל למצלמה, במרחק שבו כל הגוף נראה.</p>
   <button id="startBtn">התחל</button>
@@ -803,7 +850,7 @@ function showResults(){
   drawDiagram();
   addToGallery(document.getElementById('trajCanvas').toDataURL('image/png'));
   lastResultData.galleryIndex = sessionGallery.length - 1;
-  sessionGallery[lastResultData.galleryIndex].summaryText = buildShareSummary(lastResultData);
+  sessionGallery[lastResultData.galleryIndex].shareData = buildShareData(lastResultData);
 
   const stats = [
     { v:(totalMs/1000).toFixed(2), u:'s', l:'משך הבעיטה' },
@@ -843,22 +890,24 @@ function computeJointQuant(xs, ys, ts){
 
 // Builds the text that travels alongside a shared image — overall kick stats plus a
 // breakdown for whichever joints are currently toggled on.
-function buildShareSummary(rd){
+function buildShareData(rd){
   const { jd, ts, totalMs, peakSpeed, maxKneeAngle } = rd;
-  const lines = [
-    `MyGeri — ${KICK_TYPE_LABELS[frozenKickType]}`,
-    `משך: ${(totalMs/1000).toFixed(2)}s · מהירות שיא (רגל): ${Math.round(peakSpeed)}px/s · זווית ברך: ${Math.round(maxKneeAngle)}°`
-  ];
-  JOINT_ORDER.filter(j=>visibleJoints[j]).forEach(j=>{
+  const header = `MyGeri — ${KICK_TYPE_LABELS[frozenKickType]}`;
+  const sub = `משך ${(totalMs/1000).toFixed(2)}s · מהירות רגל ${Math.round(peakSpeed)}px/s · זווית ברך ${Math.round(maxKneeAngle)}°`;
+  const rows = JOINT_ORDER.filter(j=>visibleJoints[j]).map(j=>{
     const q = computeJointQuant(jd[j].x, jd[j].y, ts);
-    lines.push(`${JOINT_LABELS[j]}: מהירות שיא ${Math.round(q.peakSpeed)}px/s · מסלול כולל ${Math.round(q.pathLen)}px`);
+    return { color: JOINT_COLORS[j], label: JOINT_LABELS[j],
+      text: `שיא ${Math.round(q.peakSpeed)}px/s · מסלול ${Math.round(q.pathLen)}px` };
   });
-  return lines.join('\n');
+  return { header, sub, rows };
+}
+function shareDataToText(sd){
+  return [sd.header, sd.sub, ...sd.rows.map(r=>`${r.label}: ${r.text}`)].join('\n');
 }
 
 function drawDiagram(){
   if(!lastResultData) return;
-  const { jd, ts, side, peakExtIdx, endIdx, maxKneeAngle, framesRef } = lastResultData;
+  const { jd, ts, side, peakExtIdx, maxKneeAngle, framesRef } = lastResultData;
   const canvas = document.getElementById('trajCanvas');
   const wrapW = document.getElementById('trajWrap').clientWidth - 32;
   const aspect = 1.05;
@@ -873,7 +922,7 @@ function drawDiagram(){
   // toggling any layer on/off never rescales or shifts the view)
   const allX = [], allY = [];
   JOINT_ORDER.forEach(j=>{ allX.push(...jd[j].x); allY.push(...jd[j].y); });
-  [0, peakExtIdx, endIdx].forEach(idx=>{
+  [0, peakExtIdx].forEach(idx=>{
     const f = framesRef[idx].full;
     Object.values(f).forEach(p=>{ allX.push(p.x); allY.push(p.y); });
   });
@@ -920,8 +969,7 @@ function drawDiagram(){
       ];
       const style = {
         start: { alpha:0.55, lw:2, dash:[2,3], r:4 },
-        peak:  { alpha:0.95, lw:3, dash:[],    r:5.5 },
-        end:   { alpha:0.7,  lw:2.2, dash:[7,4], r:4 }
+        peak:  { alpha:0.95, lw:3, dash:[],    r:5.5 }
       }[mode];
       ctx.save();
       ctx.globalAlpha = style.alpha;
@@ -944,11 +992,10 @@ function drawDiagram(){
     }
     drawSkeletonSnapshot(0, 'start');
     drawSkeletonSnapshot(peakExtIdx, 'peak');
-    drawSkeletonSnapshot(endIdx, 'end');
 
-    // Fixed-position caption box (not tied to hip position) — the three poses are often
+    // Fixed-position caption box (not tied to hip position) — the two poses are often
     // close together in space, so labels anchored to each hip point used to overlap.
-    const capW = 128, capH = 56, capX = 10, capY = 10;
+    const capW = 128, capH = 42, capX = 10, capY = 10;
     ctx.save();
     ctx.fillStyle = 'rgba(255,255,255,0.82)';
     ctx.strokeStyle = 'rgba(18,18,18,0.15)';
@@ -961,7 +1008,6 @@ function drawDiagram(){
     ctx.fillStyle = '#121212';
     ctx.fillText('○ התחלה', capX+10, capY+18);
     ctx.fillText('● שיא — '+Math.round(maxKneeAngle)+'°', capX+10, capY+34);
-    ctx.fillText('◌ סיום', capX+10, capY+50);
     ctx.restore();
   }
 
@@ -991,36 +1037,11 @@ function drawDiagram(){
     }
   });
 
-  // Quantified data for whichever joints are currently toggled on — baked directly into
-  // the image so sharing always carries the numbers along with the picture, not just the lines.
-  const activeJoints = JOINT_ORDER.filter(j=>visibleJoints[j]);
-  if(activeJoints.length){
-    const lineH = 13, boxW = 172, boxH = 16 + activeJoints.length*lineH;
-    const bx = W - 10 - boxW, by = H - 10 - boxH;
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.strokeStyle = 'rgba(18,18,18,0.15)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    if(ctx.roundRect) ctx.roundRect(bx,by,boxW,boxH,8); else ctx.rect(bx,by,boxW,boxH);
-    ctx.fill(); ctx.stroke();
-    ctx.font = "600 9.5px 'JetBrains Mono', monospace";
-    ctx.textAlign = 'right';
-    activeJoints.forEach((j,i)=>{
-      const q = computeJointQuant(jd[j].x, jd[j].y, ts);
-      const y = by + 17 + i*lineH;
-      ctx.beginPath(); ctx.arc(bx+boxW-8, y-3, 3, 0, 7); ctx.fillStyle = JOINT_COLORS[j]; ctx.fill();
-      ctx.fillStyle = '#121212';
-      ctx.fillText(`${JOINT_LABELS[j]}: ${Math.round(q.peakSpeed)}px/s · ${Math.round(q.pathLen)}px`, bx+boxW-16, y);
-    });
-    ctx.restore();
-  }
-
   // Keep this kick's own gallery thumbnail (and its data summary) in sync with whatever is
   // currently toggled on — otherwise sharing would always send the initial snapshot/numbers.
   if(lastResultData.galleryIndex != null && sessionGallery[lastResultData.galleryIndex]){
     sessionGallery[lastResultData.galleryIndex].dataUrl = canvas.toDataURL('image/png');
-    sessionGallery[lastResultData.galleryIndex].summaryText = buildShareSummary(lastResultData);
+    sessionGallery[lastResultData.galleryIndex].shareData = buildShareData(lastResultData);
     renderGallery();
   }
 }
@@ -1045,6 +1066,30 @@ function renderJointLegend(){
     });
   });
 }
+
+// ---------- Data sheet popup ----------
+const dataSheetOverlay = document.getElementById('dataSheetOverlay');
+document.getElementById('dataSheetBtn').addEventListener('click', ()=>{
+  if(!lastResultData) return;
+  const sd = buildShareData(lastResultData);
+  document.getElementById('sheetHeader').textContent = sd.header;
+  document.getElementById('sheetSub').textContent = sd.sub;
+  const rowsEl = document.getElementById('sheetRows');
+  rowsEl.innerHTML = sd.rows.length
+    ? sd.rows.map(r=>`
+        <div class="sheetRow">
+          <span class="dot" style="background:${r.color};"></span>
+          <span class="label">${r.label}</span>
+          <span class="val">${r.text}</span>
+        </div>`).join('')
+    : `<div class="sheetEmpty">לא נבחר אף מפרק — הקישו על אחד מהם למעלה כדי לראות נתונים מדויקים</div>`;
+  dataSheetOverlay.classList.add('show');
+  document.getElementById('sheetShareBtn').onclick = ()=>{
+    const canvas = document.getElementById('trajCanvas');
+    shareImage(canvas.toDataURL('image/png'), lastResultData.galleryIndex ?? 0, sd);
+  };
+});
+document.getElementById('sheetCloseBtn').addEventListener('click', ()=> dataSheetOverlay.classList.remove('show'));
 
 // ---------- Session album ----------
 let sessionGallery = []; // {dataUrl, id}
@@ -1075,23 +1120,95 @@ function openLightbox(idx){
   if(!g) return;
   lightboxImg.src = g.dataUrl;
   lightboxEl.classList.add('show');
-  document.getElementById('lightboxShare').onclick = ()=> shareImage(g.dataUrl, idx, g.summaryText);
+  document.getElementById('lightboxShare').onclick = ()=> shareImage(g.dataUrl, idx, g.shareData);
 }
 document.getElementById('lightboxClose').addEventListener('click', ()=> lightboxEl.classList.remove('show'));
 
+// ---------- Composite image (diagram + a nicely-spaced data card) for sharing ----------
+// Card metrics are authored at this reference width; drawComposite scales them to match
+// the actual image resolution, so the card stays crisp and proportional either way.
+const CARD_REF_WIDTH = 380;
+function computeCardHeight(sd){
+  const rowH = 24, pad = 16;
+  let h = pad*2 + 22 + 8 + 18;
+  if(sd.rows.length) h += 14 + sd.rows.length*rowH;
+  return Math.round(h);
+}
+function drawCardOnCanvas(ctx, x, y, width, sd){
+  const rowH = 24, pad = 16;
+  const height = computeCardHeight(sd);
+  ctx.fillStyle = '#EDE7DA';
+  ctx.fillRect(x, y, width, height);
+  ctx.strokeStyle = 'rgba(18,18,18,0.14)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x+0.5, y+0.5, width-1, height-1);
+  ctx.textAlign = 'right';
+  let cy = y + pad + 15;
+  ctx.font = "800 15px 'Heebo', sans-serif";
+  ctx.fillStyle = '#121212';
+  ctx.fillText(sd.header, x+width-pad, cy);
+  cy += 22;
+  ctx.font = "600 11.5px 'JetBrains Mono', monospace";
+  ctx.fillStyle = 'rgba(18,18,18,0.72)';
+  ctx.fillText(sd.sub, x+width-pad, cy);
+  cy += 8;
+  if(sd.rows.length){
+    cy += 14;
+    ctx.strokeStyle = 'rgba(18,18,18,0.12)';
+    ctx.beginPath(); ctx.moveTo(x+pad, cy-16); ctx.lineTo(x+width-pad, cy-16); ctx.stroke();
+    sd.rows.forEach(r=>{
+      ctx.beginPath(); ctx.arc(x+width-pad-3, cy-4, 4, 0, 7); ctx.fillStyle = r.color; ctx.fill();
+      ctx.font = "700 12.5px 'Heebo', sans-serif";
+      ctx.fillStyle = '#121212';
+      ctx.fillText(r.label + '  —  ' + r.text, x+width-pad-14, cy);
+      cy += rowH;
+    });
+  }
+  return height;
+}
+function buildComposite(dataUrl, shareDataObj){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const k = img.width / CARD_REF_WIDTH;
+      const cardHRaw = Math.round(computeCardHeight(shareDataObj) * k);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height + cardHRaw;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#EDE7DA';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(img, 0, 0);
+      ctx.save();
+      ctx.translate(0, img.height);
+      ctx.scale(k, k);
+      drawCardOnCanvas(ctx, 0, 0, CARD_REF_WIDTH, shareDataObj);
+      ctx.restore();
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
 // Shares via the native share sheet (navigator.share with a file) — on phones this includes
 // WhatsApp as one of the apps offered, since there's no way to push an image straight into a
-// WhatsApp chat from a web page without that OS-level share sheet.
-async function shareImage(dataUrl, idx, summaryText){
-  const text = summaryText || '';
+// WhatsApp chat from a web page without that OS-level share sheet. The diagram and its data
+// card are composited into one image first, so the numbers always travel with the picture.
+async function shareImage(dataUrl, idx, shareDataObj){
+  const text = shareDataObj ? shareDataToText(shareDataObj) : '';
+  let finalUrl = dataUrl;
   try{
-    const res = await fetch(dataUrl);
+    if(shareDataObj) finalUrl = await buildComposite(dataUrl, shareDataObj);
+  }catch(e){ /* fall back to the plain diagram image if compositing fails */ }
+  try{
+    const res = await fetch(finalUrl);
     const blob = await res.blob();
     const file = new File([blob], `mygeri-kick-${idx+1}.png`, {type:'image/png'});
     if(navigator.canShare && navigator.canShare({files:[file]})){
       await navigator.share({ files:[file], title:'MyGeri — מסלול בעיטה', text });
     } else {
-      window.open(dataUrl, '_blank');
+      window.open(finalUrl, '_blank');
       if(text && navigator.clipboard){
         try{ await navigator.clipboard.writeText(text); toast('התמונה נפתחה, והנתונים הועתקו — הדביקו אותם בהודעה'); }
         catch(_){ toast('פתחנו את התמונה בכרטיסייה חדשה — שמרו ושתפו משם'); }
@@ -1101,7 +1218,7 @@ async function shareImage(dataUrl, idx, summaryText){
     }
   }catch(e){
     if(e && e.name === 'AbortError') return; // person cancelled the share sheet
-    window.open(dataUrl, '_blank');
+    window.open(finalUrl, '_blank');
     toast('פתחנו את התמונה בכרטיסייה חדשה — שמרו ושתפו משם');
   }
 }
