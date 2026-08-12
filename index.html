@@ -88,6 +88,20 @@
   #micNote{position:absolute; top:60px; left:18px; font-size:11px; color:var(--muted); max-width:150px; opacity:0;}
   #micNote.on{opacity:1;}
 
+  #liveTranscript{
+    position:absolute; bottom:52px; left:50%; transform:translateX(-50%);
+    font-size:12px; color:rgba(237,231,218,0.55); max-width:80%; text-align:center;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:0; transition:opacity .15s;
+  }
+  #liveTranscript.on{opacity:1;}
+
+  #stopFlash{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:44px; font-weight:800; color:var(--paper); background:rgba(178,58,46,0.55);
+    opacity:0; pointer-events:none; z-index:25; transition:opacity .1s;
+  }
+  #stopFlash.show{opacity:1;}
+
   #camError{
     position:absolute; inset:0; display:none; align-items:center; justify-content:center;
     flex-direction:column; gap:14px; background:var(--ink); z-index:15; padding:30px; text-align:center;
@@ -112,6 +126,15 @@
 
   #trajWrap{padding:6px 16px 4px;}
   #trajCanvas{width:100%; height:auto; background:var(--paper-2); border-radius:16px; display:block;}
+
+  #jointLegend{display:flex; justify-content:center; gap:8px; padding:10px 16px 2px; flex-wrap:wrap;}
+  .jointChip{
+    display:flex; align-items:center; gap:6px; background:none;
+    border:1.5px solid rgba(18,18,18,0.15); border-radius:20px; padding:7px 14px;
+    font-family:'Heebo'; font-size:13px; color:var(--ink); opacity:1; transition:opacity .15s, border-color .15s;
+  }
+  .jointChip .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+  .jointChip.off{opacity:.35;}
 
   #stats{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:rgba(18,18,18,.1);
     margin:18px 16px; border-radius:14px; overflow:hidden;}
@@ -151,6 +174,8 @@
     <div id="timer" class="mono">0.0s</div>
     <button id="stopBtn">✋ עצור</button>
     <div id="micNote"></div>
+    <div id="liveTranscript" class="mono"></div>
+    <div id="stopFlash">⏹ עצירה</div>
     <button id="camSwitch" title="החלף מצלמה" aria-label="החלף מצלמה">
       <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
         <path d="M17 2l3 3-3 3"/>
@@ -176,6 +201,7 @@
     <button id="closeResults">חדש</button>
   </div>
   <div id="trajWrap"><canvas id="trajCanvas"></canvas></div>
+  <div id="jointLegend"></div>
   <div id="stats"></div>
   <div id="norm"></div>
   <button id="retryBtn">בעיטה נוספת</button>
@@ -211,6 +237,8 @@ const timerEl = document.getElementById('timer');
 const recBorder = document.getElementById('recBorder');
 const stopBtn = document.getElementById('stopBtn');
 const micNote = document.getElementById('micNote');
+const liveTranscript = document.getElementById('liveTranscript');
+const stopFlash = document.getElementById('stopFlash');
 const permOverlay = document.getElementById('permOverlay');
 const startBtn = document.getElementById('startBtn');
 const camSwitch = document.getElementById('camSwitch');
@@ -420,7 +448,11 @@ function stopRecording(reason){
   timerEl.classList.remove('on');
   stopBtn.classList.remove('on');
   micNote.classList.remove('on');
+  liveTranscript.classList.remove('on');
+  liveTranscript.textContent = '';
   beep(320,220,0.25);
+  stopFlash.classList.add('show');
+  setTimeout(()=> stopFlash.classList.remove('show'), 500);
   setState('תוצאות');
   showResults();
 }
@@ -438,11 +470,20 @@ function startPersistentRecognition(){
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.onresult = (e)=>{
+      let lastTxt = '';
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        lastTxt = e.results[i][0].transcript.trim();
+      }
+      if(phase === 'recording' && lastTxt){
+        liveTranscript.textContent = '🎙 ' + lastTxt;
+        liveTranscript.classList.add('on');
+      }
       if(phase !== 'recording') return;
       for(let i=e.resultIndex;i<e.results.length;i++){
         const txt = e.results[i][0].transcript.trim();
         if(/עצור|עצרי|עצרו|סטופ|stop|סיים|סיימתי|^די$/i.test(txt)){
           stopRecording('voice');
+          break;
         }
       }
     };
@@ -497,6 +538,9 @@ const JOINT_COLORS = {
   foot: '#C9A227'  // gold
 };
 const JOINT_LABELS = { hip:'אגן', knee:'ברך', ankle:'קרסול', foot:'כף רגל' };
+const JOINT_ORDER = ['hip','knee','ankle','foot'];
+let lastResultData = null;
+let visibleJoints = { hip:true, knee:true, ankle:true, foot:true };
 
 function showResults(){
   document.getElementById('results').classList.add('show');
@@ -537,11 +581,11 @@ function showResults(){
     peakSpeed = Math.max(peakSpeed, d/dt);
   }
 
-  // max knee extension angle (hip-knee-ankle)
-  let maxKneeAngle = 0;
-  frames.forEach(f=>{
+  // max knee extension angle (hip-knee-ankle) — track which frame it happens at
+  let maxKneeAngle = 0, peakExtIdx = 0;
+  frames.forEach((f,i)=>{
     const a = angleDeg(f.hip, f[side].knee, f[side].ankle);
-    if(a>maxKneeAngle) maxKneeAngle=a;
+    if(a>maxKneeAngle){ maxKneeAngle=a; peakExtIdx=i; }
   });
 
   // kick height relative to hip baseline
@@ -550,7 +594,10 @@ function showResults(){
   const kickHeightPx = baseFootY - minFootY;
   const peakIdx = jd.foot.y.indexOf(minFootY);
 
-  drawDiagram(jd, ts, side, peakIdx, maxKneeAngle);
+  visibleJoints = { hip:true, knee:true, ankle:true, foot:true };
+  lastResultData = { jd, ts, side, peakIdx, peakExtIdx, maxKneeAngle };
+  renderJointLegend();
+  drawDiagram();
 
   const stats = [
     { v:(totalMs/1000).toFixed(2), u:'s', l:'משך הבעיטה' },
@@ -571,8 +618,11 @@ function showResults(){
 }
 
 // Single static diagram: every joint's full path in its own color, on a 90°-aligned
-// grid anchored at the starting hip position, with time-interval tick markers.
-function drawDiagram(jd, ts, side, peakIdx, maxKneeAngle){
+// grid anchored at the starting hip position, with time-interval tick markers, plus
+// two black stick-figure snapshots (start pose, full-extension peak pose).
+function drawDiagram(){
+  if(!lastResultData) return;
+  const { jd, ts, side, peakIdx, peakExtIdx, maxKneeAngle } = lastResultData;
   const canvas = document.getElementById('trajCanvas');
   const wrapW = document.getElementById('trajWrap').clientWidth - 32;
   const aspect = 1.05;
@@ -583,12 +633,12 @@ function drawDiagram(jd, ts, side, peakIdx, maxKneeAngle){
   ctx.scale(2,2);
   ctx.clearRect(0,0,W,H);
 
-  // fit all joints' full paths into the canvas
+  // fit ALL joints' full paths into the canvas (fixed regardless of toggles, so the view doesn't jump)
   const allX = [].concat(jd.hip.x, jd.knee.x, jd.ankle.x, jd.foot.x);
   const allY = [].concat(jd.hip.y, jd.knee.y, jd.ankle.y, jd.foot.y);
   const minX=Math.min(...allX), maxX=Math.max(...allX);
   const minY=Math.min(...allY), maxY=Math.max(...allY);
-  const pad = 30;
+  const pad = 32;
   const sx = (W-2*pad)/((maxX-minX)||1);
   const sy = (H-2*pad)/((maxY-minY)||1);
   const s = Math.min(sx,sy);
@@ -613,9 +663,10 @@ function drawDiagram(jd, ts, side, peakIdx, maxKneeAngle){
   ctx.beginPath(); ctx.moveTo(origin.x,0); ctx.lineTo(origin.x,H); ctx.stroke();
   ctx.restore();
 
-  // --- joint paths, each in its own color, with time-interval tick dots ---
+  // --- joint paths, each in its own color, with time-interval tick dots (only visible joints) ---
   const tickEveryMs = 150;
-  ['hip','knee','ankle','foot'].forEach(joint=>{
+  JOINT_ORDER.forEach(joint=>{
+    if(!visibleJoints[joint]) return;
     const xs = jd[joint].x, ys = jd[joint].y;
     ctx.strokeStyle = JOINT_COLORS[joint];
     ctx.lineWidth = joint==='hip' ? 2 : 2.6;
@@ -636,37 +687,58 @@ function drawDiagram(jd, ts, side, peakIdx, maxKneeAngle){
         nextTick += tickEveryMs;
       }
     }
-    // start marker (ring)
-    const p0 = mapPt(xs[0], ys[0]);
-    ctx.strokeStyle = JOINT_COLORS[joint]; ctx.lineWidth=1.6;
-    ctx.beginPath(); ctx.arc(p0.x,p0.y,5,0,7); ctx.stroke();
-    // end marker (square)
-    const pEnd = mapPt(xs[xs.length-1], ys[ys.length-1]);
-    ctx.fillStyle = JOINT_COLORS[joint];
-    ctx.fillRect(pEnd.x-3, pEnd.y-3, 6, 6);
   });
 
-  // peak-of-kick marker + angle label on the foot path
-  const pk = mapPt(jd.foot.x[peakIdx], jd.foot.y[peakIdx]);
-  ctx.fillStyle = '#B23A2E';
-  ctx.beginPath(); ctx.arc(pk.x,pk.y,4.5,0,7); ctx.fill();
-  ctx.font = "600 11px 'JetBrains Mono', monospace";
-  ctx.fillStyle = '#121212';
-  ctx.textAlign = pk.x > W/2 ? 'right' : 'left';
-  ctx.fillText(Math.round(maxKneeAngle)+'° בברך', pk.x + (pk.x>W/2?-10:10), pk.y - 8);
+  // --- black stick-figure snapshots: start pose (outline) + full-extension peak pose (solid) ---
+  function drawSnapshot(idx, solid){
+    const chain = JOINT_ORDER.filter(j=>visibleJoints[j]);
+    ctx.save();
+    ctx.strokeStyle = solid ? '#121212' : 'rgba(18,18,18,0.55)';
+    ctx.lineWidth = solid ? 2.2 : 1.4;
+    if(!solid) ctx.setLineDash([3,3]);
+    ctx.beginPath();
+    chain.forEach((j,i)=>{
+      const p = mapPt(jd[j].x[idx], jd[j].y[idx]);
+      i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
+    });
+    ctx.stroke();
+    ctx.restore();
+    chain.forEach(j=>{
+      const p = mapPt(jd[j].x[idx], jd[j].y[idx]);
+      ctx.beginPath(); ctx.arc(p.x,p.y, solid?6:5, 0, 7);
+      if(solid){ ctx.fillStyle='#121212'; ctx.fill(); }
+      else{ ctx.strokeStyle='rgba(18,18,18,0.7)'; ctx.lineWidth=1.6; ctx.stroke(); }
+    });
+  }
+  drawSnapshot(0, false);        // start of movement — hollow outline
+  drawSnapshot(peakExtIdx, true); // full extension / peak of kick — solid black
 
-  // --- legend ---
-  const legendItems = ['hip','knee','ankle','foot'];
-  const lw = W / legendItems.length;
-  ctx.font = "12px 'Heebo', sans-serif";
-  ctx.textAlign = 'center';
-  legendItems.forEach((joint,i)=>{
-    const cx = lw*i + lw/2;
-    const cy = H - 14;
-    ctx.fillStyle = JOINT_COLORS[joint];
-    ctx.beginPath(); ctx.arc(cx - 26, cy, 4, 0, 7); ctx.fill();
-    ctx.fillStyle = '#121212';
-    ctx.fillText(JOINT_LABELS[joint], cx + 6, cy+4);
+  // labels for the two snapshots, anchored at each pose's hip point
+  ctx.font = "600 11px 'JetBrains Mono', monospace";
+  const startHip = mapPt(jd.hip.x[0], jd.hip.y[0]);
+  ctx.fillStyle = 'rgba(18,18,18,0.7)';
+  ctx.textAlign = startHip.x > W/2 ? 'right' : 'left';
+  ctx.fillText('התחלה', startHip.x + (startHip.x>W/2?-10:10), startHip.y - 10);
+
+  const peakHip = mapPt(jd.hip.x[peakExtIdx], jd.hip.y[peakExtIdx]);
+  ctx.fillStyle = '#121212';
+  ctx.textAlign = peakHip.x > W/2 ? 'right' : 'left';
+  ctx.fillText('שיא — '+Math.round(maxKneeAngle)+'° בברך', peakHip.x + (peakHip.x>W/2?-10:10), peakHip.y - 10);
+}
+
+function renderJointLegend(){
+  const el = document.getElementById('jointLegend');
+  el.innerHTML = JOINT_ORDER.map(j=>`
+    <button class="jointChip ${visibleJoints[j] ? '' : 'off'}" data-joint="${j}" style="border-color:${JOINT_COLORS[j]}55;">
+      <span class="dot" style="background:${JOINT_COLORS[j]};"></span>${JOINT_LABELS[j]}
+    </button>`).join('');
+  el.querySelectorAll('.jointChip').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const j = btn.dataset.joint;
+      visibleJoints[j] = !visibleJoints[j];
+      btn.classList.toggle('off', !visibleJoints[j]);
+      drawDiagram();
+    });
   });
 }
 
@@ -729,7 +801,7 @@ async function openCamera(mode){
   try{
     stream = await navigator.mediaDevices.getUserMedia({
       video:{ facingMode:{ideal:mode}, width:{ideal:1280}, height:{ideal:720} },
-      audio:true
+      audio:false // mic is handled separately by SpeechRecognition — sharing the track can block voice-stop on some devices
     });
   }catch(e){
     showCamError('לא ניתן לגשת למצלמה: ' + (e.message || e.name || 'שגיאה לא ידועה'));
