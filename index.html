@@ -412,8 +412,7 @@ function startRecording(){
   recBorder.classList.add('on');
   timerEl.classList.add('on');
   stopBtn.classList.add('on');
-  micNote.textContent = recognitionActive ? '🎙 אמרו "סטופ" לסיום ההקלטה' : (micNote.textContent || 'עצירה קולית לא זמינה — השתמשו בכפתור');
-  micNote.classList.add('on');
+  startRecognitionForRecording();
 }
 
 function recordFrame(lm, w, h){
@@ -450,6 +449,7 @@ function stopRecording(reason){
   micNote.classList.remove('on');
   liveTranscript.classList.remove('on');
   liveTranscript.textContent = '';
+  stopRecognition();
   beep(320,220,0.25);
   stopFlash.classList.add('show');
   setTimeout(()=> stopFlash.classList.remove('show'), 500);
@@ -457,11 +457,13 @@ function stopRecording(reason){
   showResults();
 }
 
-// ---------- Speech recognition (persistent — started once, listens throughout the session) ----------
-function startPersistentRecognition(){
+// ---------- Speech recognition (only active during the recording window — releases the mic
+// between kicks so it doesn't monopolize it for other apps/tabs) ----------
+function startRecognitionForRecording(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SR){
     micNote.textContent = 'עצירה קולית לא נתמכת בדפדפן זה — השתמשו בכפתור';
+    micNote.classList.add('on');
     return;
   }
   try{
@@ -474,11 +476,10 @@ function startPersistentRecognition(){
       for(let i=e.resultIndex;i<e.results.length;i++){
         lastTxt = e.results[i][0].transcript.trim();
       }
-      if(phase === 'recording' && lastTxt){
+      if(lastTxt){
         liveTranscript.textContent = '🎙 ' + lastTxt;
         liveTranscript.classList.add('on');
       }
-      if(phase !== 'recording') return;
       for(let i=e.resultIndex;i<e.results.length;i++){
         const txt = e.results[i][0].transcript.trim();
         if(/עצור|עצרי|עצרו|סטופ|stop|סיים|סיימתי|^די$/i.test(txt)){
@@ -489,20 +490,26 @@ function startPersistentRecognition(){
     };
     recognition.onerror = (e)=>{
       if(e.error === 'not-allowed' || e.error === 'service-not-allowed'){
-        recognitionActive = false;
         micNote.textContent = 'הרשאת מיקרופון נדחתה — השתמשו בכפתור לעצירה';
         micNote.classList.add('on');
       }
-      // 'no-speech' / 'aborted' and similar are routine — onend will restart it
+      // 'no-speech' / 'aborted' and similar are routine — onend will restart it while still recording
     };
     recognition.onend = ()=>{
-      if(recognitionActive){ try{ recognition.start(); }catch(e){} }
+      if(recognitionActive && phase==='recording'){ try{ recognition.start(); }catch(e){} }
     };
     recognition.start();
     recognitionActive = true;
+    micNote.textContent = '🎙 אמרו "סטופ" לסיום ההקלטה';
+    micNote.classList.add('on');
   }catch(e){
     micNote.textContent = 'עצירה קולית לא זמינה — השתמשו בכפתור';
+    micNote.classList.add('on');
   }
+}
+function stopRecognition(){
+  recognitionActive = false;
+  if(recognition){ try{ recognition.stop(); }catch(e){} recognition = null; }
 }
 
 stopBtn.addEventListener('click', ()=> stopRecording('manual'));
@@ -794,9 +801,6 @@ async function detectLoop(){
 // ---------- Startup ----------
 async function openCamera(mode){
   camError.classList.remove('show');
-  if(currentStream){
-    currentStream.getTracks().forEach(t=>t.stop());
-  }
   let stream;
   try{
     stream = await navigator.mediaDevices.getUserMedia({
@@ -806,6 +810,11 @@ async function openCamera(mode){
   }catch(e){
     showCamError('לא ניתן לגשת למצלמה: ' + (e.message || e.name || 'שגיאה לא ידועה'));
     throw e;
+  }
+  // only tear down the previous (working) stream once the new one is confirmed —
+  // otherwise a failed switch (e.g. device has no front camera) left a black screen
+  if(currentStream){
+    currentStream.getTracks().forEach(t=>t.stop());
   }
   currentStream = stream;
   video.srcObject = stream;
@@ -878,8 +887,6 @@ async function init(mode){
   phase = 'calibrate';
   setState('כיול');
   requestAnimationFrame(detectLoop);
-
-  if(!recognitionActive) startPersistentRecognition();
 }
 
 async function startWith(mode){
@@ -900,11 +907,11 @@ camSwitch.addEventListener('click', async ()=>{
   camSwitch.disabled = true;
   const next = facingMode === 'user' ? 'environment' : 'user';
   try{
-    facingMode = next;
     await openCamera(next);
+    facingMode = next; // only commit once the switch actually succeeded
     stableSince = null; stabilityBuffer = [];
   }catch(e){
-    hintEl.textContent = 'לא ניתן להחליף מצלמה במכשיר זה';
+    // openCamera already surfaced a clear error panel; the previous camera keeps running
   }
   camSwitch.disabled = false;
 });
