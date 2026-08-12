@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>מאי גרי — מסלול</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#121212;
+    --ink-2:#1c1c1a;
+    --paper:#EDE7DA;
+    --paper-2:#E2DBC9;
+    --indigo:#2B3A67;
+    --indigo-l:#5169A8;
+    --vermilion:#B23A2E;
+    --gold:#C9A227;
+    --muted:#8B8B85;
+    --line:rgba(237,231,218,0.14);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--ink);color:var(--paper);
+    font-family:'Heebo',sans-serif; overflow:hidden;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;}
+
+  /* ---------- Top bar ---------- */
+  #topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 18px; z-index:20; position:relative;
+  }
+  #stateLabel{
+    font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.18em;
+    text-transform:uppercase; color:var(--muted);
+    border:1px solid var(--line); border-radius:20px; padding:5px 14px;
+  }
+  #stateLabel.active{color:var(--ink); background:var(--gold); border-color:var(--gold);}
+  #stateLabel.rec{color:var(--paper); background:var(--vermilion); border-color:var(--vermilion);}
+  #legTag{font-size:12px; color:var(--muted);}
+
+  /* ---------- Camera stage ---------- */
+  #stage{position:relative; flex:1; overflow:hidden; background:#000;}
+  #video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1);}
+  #overlay{position:absolute; inset:0; width:100%; height:100%;}
+  #recBorder{position:absolute; inset:0; pointer-events:none; border:0px solid var(--vermilion); transition:border-width .25s;}
+  #recBorder.on{border-width:4px; animation:pulse 1.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.45;}}
+
+  #hint{
+    position:absolute; left:50%; bottom:26px; transform:translateX(-50%);
+    background:rgba(18,18,18,0.78); backdrop-filter:blur(6px);
+    padding:10px 20px; border-radius:14px; font-size:15px; text-align:center;
+    border:1px solid var(--line); max-width:88%;
+  }
+  #hint.good{color:var(--gold); border-color:var(--gold);}
+
+  #countdown{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace; font-weight:600; font-size:min(38vw,220px);
+    color:var(--paper); text-shadow:0 0 40px rgba(0,0,0,.6); pointer-events:none; opacity:0;
+  }
+  #countdown.show{opacity:1;}
+
+  #timer{
+    position:absolute; bottom:18px; right:18px; font-size:14px; color:var(--paper);
+    background:rgba(178,58,46,0.85); padding:6px 12px; border-radius:10px; opacity:0;
+  }
+  #timer.on{opacity:1;}
+
+  #stopBtn{
+    position:absolute; top:18px; left:18px; background:rgba(18,18,18,.7);
+    border:1px solid var(--line); color:var(--paper); font-family:'Heebo';
+    font-size:13px; padding:8px 16px; border-radius:12px; opacity:0; pointer-events:none;
+  }
+  #stopBtn.on{opacity:1; pointer-events:auto;}
+
+  #micNote{position:absolute; top:60px; left:18px; font-size:11px; color:var(--muted); max-width:150px; opacity:0;}
+  #micNote.on{opacity:1;}
+
+  /* ---------- Results ---------- */
+  #results{
+    position:fixed; inset:0; background:var(--paper); color:var(--ink);
+    display:flex; flex-direction:column; transform:translateY(100%);
+    transition:transform .4s cubic-bezier(.16,1,.3,1); z-index:30; overflow-y:auto;
+  }
+  #results.show{transform:translateY(0);}
+  .rHead{display:flex; align-items:center; justify-content:space-between; padding:18px 20px 6px;}
+  .rHead h1{font-size:20px; margin:0; font-weight:800;}
+  .rHead .sub{font-size:12px; color:var(--ink); opacity:.55; margin-top:2px;}
+  #closeResults{background:none;border:1px solid rgba(18,18,18,.2); color:var(--ink);
+    border-radius:10px; padding:7px 14px; font-family:'Heebo'; font-size:13px;}
+
+  #trajWrap{padding:6px 16px 4px;}
+  #trajCanvas{width:100%; height:auto; background:var(--paper-2); border-radius:16px; display:block;}
+
+  #playBtn{
+    display:block; margin:10px auto 4px; background:var(--indigo); color:var(--paper);
+    border:none; border-radius:24px; padding:10px 26px; font-family:'Heebo'; font-size:14px;
+    font-weight:600;
+  }
+
+  #stats{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:rgba(18,18,18,.1);
+    margin:18px 16px; border-radius:14px; overflow:hidden;}
+  .stat{background:var(--paper); padding:14px 16px;}
+  .stat .v{font-family:'JetBrains Mono',monospace; font-size:22px; font-weight:600;}
+  .stat .u{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); margin-right:4px;}
+  .stat .l{font-size:12px; color:var(--muted); margin-top:2px;}
+
+  #norm{margin:0 16px 24px; padding:12px 14px; border:1px dashed rgba(18,18,18,.25); border-radius:12px; font-size:12px; color:var(--muted); line-height:1.6;}
+
+  #retryBtn{
+    margin:0 16px 30px; background:none; border:1px solid rgba(18,18,18,.3); color:var(--ink);
+    border-radius:24px; padding:12px; font-family:'Heebo'; font-size:14px; font-weight:600;
+  }
+
+  #permOverlay{position:fixed; inset:0; background:var(--ink); display:flex; align-items:center;
+    justify-content:center; flex-direction:column; gap:16px; z-index:50; padding:30px; text-align:center;}
+  #permOverlay button{background:var(--indigo); color:var(--paper); border:none; border-radius:24px;
+    padding:14px 34px; font-family:'Heebo'; font-size:16px; font-weight:600;}
+  #permOverlay p{color:var(--muted); font-size:14px; max-width:300px; line-height:1.7;}
+  #permOverlay h1{font-size:22px; margin:0; font-weight:800;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <span id="stateLabel" class="mono">כיול</span>
+    <span id="legTag" class="mono"></span>
+  </div>
+
+  <div id="stage">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="overlay"></canvas>
+    <div id="recBorder"></div>
+    <div id="countdown" class="mono">3</div>
+    <div id="hint">מחפש מיקום...</div>
+    <div id="timer" class="mono">0.0s</div>
+    <button id="stopBtn">✋ עצור</button>
+    <div id="micNote"></div>
+  </div>
+</div>
+
+<div id="results">
+  <div class="rHead">
+    <div>
+      <h1>מסלול הבעיטה</h1>
+      <div class="sub" id="legUsed">רגל בועטת: —</div>
+    </div>
+    <button id="closeResults">חדש</button>
+  </div>
+  <div id="trajWrap"><canvas id="trajCanvas"></canvas></div>
+  <button id="playBtn">▶ הפעל שוב</button>
+  <div id="stats"></div>
+  <div id="norm"></div>
+  <button id="retryBtn">בעיטה נוספת</button>
+</div>
+
+<div id="permOverlay">
+  <h1>מאי גרי — מעקב מסלול</h1>
+  <p>נדרשת גישה למצלמה (לזיהוי שלד) ולמיקרופון (לעצירה קולית ב"עצור"). עמדו בפרופיל למצלמה, במרחק שבו כל הגוף נראה.</p>
+  <button id="startBtn">התחל</button>
+</div>
+
+<script type="module">
+import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+// ---------- Landmark indices (BlazePose 33-point) ----------
+const L = {
+  L_SHOULDER:11, R_SHOULDER:12,
+  L_HIP:23, R_HIP:24,
+  L_KNEE:25, R_KNEE:26,
+  L_ANKLE:27, R_ANKLE:28,
+  L_HEEL:29, R_HEEL:30,
+  L_FOOT:31, R_FOOT:32
+};
+
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const octx = overlay.getContext('2d');
+const stateLabel = document.getElementById('stateLabel');
+const hintEl = document.getElementById('hint');
+const countdownEl = document.getElementById('countdown');
+const timerEl = document.getElementById('timer');
+const recBorder = document.getElementById('recBorder');
+const stopBtn = document.getElementById('stopBtn');
+const micNote = document.getElementById('micNote');
+const permOverlay = document.getElementById('permOverlay');
+const startBtn = document.getElementById('startBtn');
+
+let poseLandmarker = null;
+let running = false;
+let phase = 'idle'; // idle -> calibrate -> countdown -> recording -> results
+
+// stability tracking for calibration
+let stabilityBuffer = [];
+let stableSince = null;
+
+// recording state
+let frames = [];          // {t, hipY, L:{knee,ankle,heel,foot}, R:{...}}
+let recStartTime = 0;
+let peakSeen = false;
+let peakY = { L: Infinity, R: Infinity }; // min y = highest point
+let baselineFootY = { L: null, R: null };
+let framesSinceRecordStart = 0;
+const MAX_RECORD_MS = 7000;
+const SAFETY_MIN_MS = 350; // ignore end-detection before this many ms
+
+// speech recognition
+let recognition = null;
+let recognitionActive = false;
+
+function setState(txt, cls){
+  stateLabel.textContent = txt;
+  stateLabel.className = 'mono' + (cls ? ' '+cls : '');
+}
+
+function pt(lm, idx, w, h){
+  const p = lm[idx];
+  return { x: p.x * w, y: p.y * h, v: (p.visibility ?? 1) };
+}
+
+function angleDeg(a, b, c){
+  // angle at b, between a-b and c-b
+  const v1 = {x:a.x-b.x, y:a.y-b.y};
+  const v2 = {x:c.x-b.x, y:c.y-b.y};
+  const dot = v1.x*v2.x + v1.y*v2.y;
+  const m1 = Math.hypot(v1.x,v1.y), m2 = Math.hypot(v2.x,v2.y);
+  if(m1===0||m2===0) return 0;
+  let cos = dot/(m1*m2);
+  cos = Math.max(-1,Math.min(1,cos));
+  return Math.acos(cos) * 180/Math.PI;
+}
+
+function drawSkeleton(lm, w, h, colorOk){
+  octx.clearRect(0,0,w,h);
+  const idxPairs = [
+    [L.L_SHOULDER,L.R_SHOULDER],[L.L_SHOULDER,L.L_HIP],[L.R_SHOULDER,L.R_HIP],
+    [L.L_HIP,L.R_HIP],
+    [L.L_HIP,L.L_KNEE],[L.L_KNEE,L.L_ANKLE],[L.L_ANKLE,L.L_HEEL],[L.L_ANKLE,L.L_FOOT],[L.L_HEEL,L.L_FOOT],
+    [L.R_HIP,L.R_KNEE],[L.R_KNEE,L.R_ANKLE],[L.R_ANKLE,L.R_HEEL],[L.R_ANKLE,L.R_FOOT],[L.R_HEEL,L.R_FOOT]
+  ];
+  octx.strokeStyle = colorOk ? '#C9A227' : 'rgba(237,231,218,0.55)';
+  octx.lineWidth = 3;
+  octx.lineCap = 'round';
+  // mirror x because video is mirrored (scaleX(-1)); draw in mirrored coord space too
+  octx.save();
+  octx.translate(w,0); octx.scale(-1,1);
+  idxPairs.forEach(([a,b])=>{
+    const pa = pt(lm,a,w,h), pb = pt(lm,b,w,h);
+    if(pa.v<0.4||pb.v<0.4) return;
+    octx.beginPath(); octx.moveTo(pa.x,pa.y); octx.lineTo(pb.x,pb.y); octx.stroke();
+  });
+  [L.L_HIP,L.R_HIP,L.L_KNEE,L.R_KNEE,L.L_ANKLE,L.R_ANKLE,L.L_HEEL,L.R_HEEL,L.L_FOOT,L.R_FOOT].forEach(i=>{
+    const p = pt(lm,i,w,h);
+    if(p.v<0.4) return;
+    octx.beginPath(); octx.arc(p.x,p.y,4,0,7); octx.fillStyle = colorOk?'#C9A227':'#EDE7DA'; octx.fill();
+  });
+  octx.restore();
+}
+
+function resizeCanvas(){
+  overlay.width = video.videoWidth || overlay.clientWidth;
+  overlay.height = video.videoHeight || overlay.clientHeight;
+}
+
+// ---------- Calibration logic ----------
+function evaluateCalibration(lm, w, h){
+  const lHip = pt(lm,L.L_HIP,w,h), rHip = pt(lm,L.R_HIP,w,h);
+  const lAnkle = pt(lm,L.L_ANKLE,w,h), rAnkle = pt(lm,L.R_ANKLE,w,h);
+  const lSh = pt(lm,L.L_SHOULDER,w,h), rSh = pt(lm,L.R_SHOULDER,w,h);
+  if(Math.min(lHip.v,rHip.v,lAnkle.v,rAnkle.v) < 0.5){
+    return {ok:false, msg:'לא רואה את כל הגוף — התרחק/ו קצת'};
+  }
+  const hipY = (lHip.y+rHip.y)/2;
+  const ankleY = (lAnkle.y+rAnkle.y)/2;
+  const legPx = Math.abs(ankleY-hipY);
+  const ratio = legPx / h;
+
+  const shoulderW = Math.abs(lSh.x-rSh.x);
+  const profileRatio = shoulderW / (legPx||1);
+
+  if(ratio < 0.30) return {ok:false, msg:'התקרבו למצלמה'};
+  if(ratio > 0.62) return {ok:false, msg:'התרחקו מהמצלמה'};
+  if(profileRatio > 0.42) return {ok:false, msg:'הסתובבו לעמידת פרופיל (צד למצלמה)'};
+
+  return {ok:true, msg:'מעולה — נשארו כך', hipY, legPx};
+}
+
+function onCalibrationTick(ok){
+  const now = performance.now();
+  stabilityBuffer.push({t:now, ok});
+  stabilityBuffer = stabilityBuffer.filter(s => now - s.t < 900);
+  const allOk = stabilityBuffer.length > 10 && stabilityBuffer.every(s=>s.ok);
+  if(allOk && stableSince===null) stableSince = now;
+  if(!allOk) stableSince = null;
+  if(stableSince && now-stableSince > 600){
+    startCountdown();
+  }
+}
+
+function startCountdown(){
+  phase = 'countdown';
+  setState('הכן', 'active');
+  hintEl.style.display='none';
+  let n = 3;
+  countdownEl.textContent = n;
+  countdownEl.classList.add('show');
+  const iv = setInterval(()=>{
+    n--;
+    if(n<=0){
+      clearInterval(iv);
+      countdownEl.classList.remove('show');
+      startRecording();
+      return;
+    }
+    countdownEl.textContent = n;
+  }, 800);
+}
+
+// ---------- Recording ----------
+function startRecording(){
+  phase = 'recording';
+  setState('מקליט', 'rec');
+  frames = [];
+  peakSeen = false;
+  peakY = {L:Infinity,R:Infinity};
+  baselineFootY = {L:null,R:null};
+  recStartTime = performance.now();
+  framesSinceRecordStart = 0;
+  recBorder.classList.add('on');
+  timerEl.classList.add('on');
+  stopBtn.classList.add('on');
+  startSpeechRecognition();
+}
+
+function recordFrame(lm, w, h){
+  const t = performance.now() - recStartTime;
+  timerEl.textContent = (t/1000).toFixed(1)+'s';
+
+  const hipL = pt(lm,L.L_HIP,w,h), hipR = pt(lm,L.R_HIP,w,h);
+  const kneeL = pt(lm,L.L_KNEE,w,h), kneeR = pt(lm,L.R_KNEE,w,h);
+  const ankleL = pt(lm,L.L_ANKLE,w,h), ankleR = pt(lm,L.R_ANKLE,w,h);
+  const heelL = pt(lm,L.L_HEEL,w,h), heelR = pt(lm,L.R_HEEL,w,h);
+  const footL = pt(lm,L.L_FOOT,w,h), footR = pt(lm,L.R_FOOT,w,h);
+
+  const frame = {
+    t,
+    hip:{x:(hipL.x+hipR.x)/2, y:(hipL.y+hipR.y)/2},
+    L:{knee:kneeL, ankle:ankleL, heel:heelL, foot:footL},
+    R:{knee:kneeR, ankle:ankleR, heel:heelR, foot:footR}
+  };
+  frames.push(frame);
+  framesSinceRecordStart++;
+
+  if(baselineFootY.L===null){ baselineFootY.L = footL.y; baselineFootY.R = footR.y; }
+
+  ['L','R'].forEach(side=>{
+    const fy = frame[side].foot.y;
+    if(fy < peakY[side]) peakY[side] = fy;
+  });
+
+  if(t > SAFETY_MIN_MS){
+    ['L','R'].forEach(side=>{
+      const range = baselineFootY[side]-peakY[side];
+      if(range > 0.05*h) peakSeen = true; // some real kick motion happened for this side
+    });
+    if(peakSeen){
+      // check if either foot has returned near baseline after its peak
+      const backL = Math.abs(frame.L.foot.y - baselineFootY.L) < 0.08*h;
+      const backR = Math.abs(frame.R.foot.y - baselineFootY.R) < 0.08*h;
+      const movedL = (baselineFootY.L-peakY.L) > 0.05*h;
+      const movedR = (baselineFootY.R-peakY.R) > 0.05*h;
+      if((movedL && backL) || (movedR && backR)){
+        stopRecording('auto');
+        return;
+      }
+    }
+  }
+
+  if(t > MAX_RECORD_MS){
+    stopRecording('timeout');
+  }
+}
+
+function stopRecording(reason){
+  if(phase !== 'recording') return;
+  phase = 'results';
+  recBorder.classList.remove('on');
+  timerEl.classList.remove('on');
+  stopBtn.classList.remove('on');
+  stopSpeechRecognition();
+  setState('תוצאות');
+  showResults();
+}
+
+// ---------- Speech recognition ----------
+function startSpeechRecognition(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){
+    micNote.textContent = 'עצירה קולית לא נתמכת בדפדפן זה — השתמשו בכפתור';
+    micNote.classList.add('on');
+    return;
+  }
+  try{
+    recognition = new SR();
+    recognition.lang = 'he-IL';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = (e)=>{
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        const txt = e.results[i][0].transcript.trim();
+        if(/עצור|עצרי|עצרו|סיים|סיימתי|די/.test(txt)){
+          stopRecording('voice');
+        }
+      }
+    };
+    recognition.onerror = ()=>{};
+    recognition.onend = ()=>{ if(recognitionActive && phase==='recording'){ try{recognition.start();}catch(e){} } };
+    recognition.start();
+    recognitionActive = true;
+    micNote.textContent = '🎙 אמרו "עצור" לסיום';
+    micNote.classList.add('on');
+  }catch(e){
+    micNote.textContent = 'עצירה קולית לא זמינה — השתמשו בכפתור';
+    micNote.classList.add('on');
+  }
+}
+function stopSpeechRecognition(){
+  recognitionActive = false;
+  micNote.classList.remove('on');
+  if(recognition){ try{recognition.stop();}catch(e){} recognition=null; }
+}
+
+stopBtn.addEventListener('click', ()=> stopRecording('manual'));
+
+// ---------- Results ----------
+function chooseKickingLeg(){
+  const rangeOf = side => {
+    let min=Infinity,max=-Infinity;
+    frames.forEach(f=>{ const y=f[side].foot.y; if(y<min)min=y; if(y>max)max=y; });
+    return max-min;
+  };
+  const rL = rangeOf('L'), rR = rangeOf('R');
+  return rR > rL ? 'R' : 'L';
+}
+
+function smooth(arr, win=3){
+  const out=[];
+  for(let i=0;i<arr.length;i++){
+    let s=0,c=0;
+    for(let k=-Math.floor(win/2); k<=Math.floor(win/2); k++){
+      const idx=i+k;
+      if(idx>=0&&idx<arr.length){ s+=arr[idx]; c++; }
+    }
+    out.push(s/c);
+  }
+  return out;
+}
+
+function showResults(){
+  document.getElementById('results').classList.add('show');
+  if(frames.length < 6){
+    document.getElementById('legUsed').textContent = 'לא נאספו מספיק נתונים — נסו שוב, ודאו שכל הגוף נראה';
+    document.getElementById('stats').innerHTML='';
+    document.getElementById('trajWrap').style.display='none';
+    document.getElementById('playBtn').style.display='none';
+    return;
+  }
+  document.getElementById('trajWrap').style.display='';
+  document.getElementById('playBtn').style.display='';
+
+  const side = chooseKickingLeg();
+  document.getElementById('legUsed').textContent = 'רגל בועטת: ' + (side==='L'?'שמאל':'ימין');
+
+  const footX = smooth(frames.map(f=>f[side].foot.x));
+  const footY = smooth(frames.map(f=>f[side].foot.y));
+  const kneeX = smooth(frames.map(f=>f[side].knee.x));
+  const kneeY = smooth(frames.map(f=>f[side].knee.y));
+  const hipX = frames.map(f=>f.hip.x), hipY = frames.map(f=>f.hip.y);
+  const ts = frames.map(f=>f.t);
+
+  // normalization unit: standing leg length at start (hip to ankle)
+  const unitPx = Math.hypot(
+    frames[0].hip.x - frames[0][side].ankle.x,
+    frames[0].hip.y - frames[0][side].ankle.y
+  ) || 1;
+
+  // total duration
+  const totalMs = ts[ts.length-1];
+
+  // peak speed (px/s) of foot, using smoothed points
+  let peakSpeed = 0, peakSpeedIdx=0;
+  for(let i=1;i<footX.length;i++){
+    const dt = (ts[i]-ts[i-1])/1000;
+    if(dt<=0) continue;
+    const d = Math.hypot(footX[i]-footX[i-1], footY[i]-footY[i-1]);
+    const spd = d/dt;
+    if(spd>peakSpeed){ peakSpeed=spd; peakSpeedIdx=i; }
+  }
+
+  // max knee extension angle (hip-knee-ankle)
+  let maxKneeAngle = 0;
+  frames.forEach(f=>{
+    const a = angleDeg(f.hip, f[side].knee, f[side].ankle);
+    if(a>maxKneeAngle) maxKneeAngle=a;
+  });
+
+  // kick height relative to hip baseline
+  const baseFootY = frames[0][side].foot.y;
+  const minFootY = Math.min(...footY);
+  const kickHeightPx = baseFootY - minFootY;
+
+  // draw trajectory (brush stroke, width by local speed)
+  const canvas = document.getElementById('trajCanvas');
+  const wrapW = document.getElementById('trajWrap').clientWidth - 32;
+  const aspect = 0.85;
+  canvas.width = wrapW * 2; // retina-ish
+  canvas.height = wrapW*aspect*2;
+  canvas.style.width = wrapW+'px';
+  canvas.style.height = (wrapW*aspect)+'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2,2);
+  const W = wrapW, H = wrapW*aspect;
+
+  // fit path into canvas with padding
+  const allX = footX.concat(kneeX, hipX);
+  const allY = footY.concat(kneeY, hipY);
+  const minX=Math.min(...allX), maxX=Math.max(...allX);
+  const minY=Math.min(...allY), maxY=Math.max(...allY);
+  const pad = 24;
+  const sx = (W-2*pad)/((maxX-minX)||1);
+  const sy = (H-2*pad)/((maxY-minY)||1);
+  const s = Math.min(sx,sy);
+  const ox = pad + (W-2*pad - (maxX-minX)*s)/2 - minX*s;
+  const oy = pad + (H-2*pad - (maxY-minY)*s)/2 - minY*s;
+  const mapPt = (x,y)=>({x:x*s+ox, y:y*s+oy});
+
+  ctx.clearRect(0,0,W,H);
+
+  // faint knee path
+  ctx.strokeStyle = 'rgba(43,58,103,0.28)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  kneeX.forEach((x,i)=>{ const p=mapPt(x,kneeY[i]); i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y); });
+  ctx.stroke();
+
+  // hip reference point
+  const hipP = mapPt(hipX[0], hipY[0]);
+  ctx.fillStyle='rgba(18,18,18,0.35)';
+  ctx.beginPath(); ctx.arc(hipP.x,hipP.y,4,0,7); ctx.fill();
+
+  // brush-stroke foot trajectory: width by local speed
+  let speeds=[0];
+  for(let i=1;i<footX.length;i++){
+    const dt=(ts[i]-ts[i-1])/1000||0.001;
+    speeds.push(Math.hypot(footX[i]-footX[i-1],footY[i]-footY[i-1])/dt);
+  }
+  const maxSpd = Math.max(...speeds,1);
+  for(let i=1;i<footX.length;i++){
+    const p0=mapPt(footX[i-1],footY[i-1]), p1=mapPt(footX[i],footY[i]);
+    const wgt = 1.5 + 6*(speeds[i]/maxSpd);
+    ctx.strokeStyle = '#2B3A67';
+    ctx.lineWidth = wgt;
+    ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke();
+  }
+  // peak marker (gold)
+  const peakIdx = footY.indexOf(minFootY);
+  const pk = mapPt(footX[peakIdx], footY[peakIdx]);
+  ctx.fillStyle = '#C9A227';
+  ctx.beginPath(); ctx.arc(pk.x,pk.y,5,0,7); ctx.fill();
+
+  // stats grid
+  const stats = [
+    { v:(totalMs/1000).toFixed(2), u:'s', l:'משך הבעיטה' },
+    { v:Math.round(peakSpeed), u:'px/s', l:'מהירות שיא (כף הרגל)' },
+    { v:Math.round(maxKneeAngle)+'°', u:'', l:'זווית ברך מקסימלית' },
+    { v:Math.round(kickHeightPx), u:'px', l:'גובה הבעיטה' },
+    { v:(kickHeightPx/unitPx).toFixed(2), u:'× רגל', l:'גובה יחסי לאורך הרגל' },
+    { v:(peakSpeed/unitPx).toFixed(2), u:'× רגל/s', l:'מהירות יחסית' },
+  ];
+  document.getElementById('stats').innerHTML = stats.map(st=>`
+    <div class="stat">
+      <div><span class="v mono">${st.v}</span><span class="u mono">${st.u}</span></div>
+      <div class="l">${st.l}</div>
+    </div>`).join('');
+
+  document.getElementById('norm').textContent =
+    'המדידות מבוססות פיקסלים מהמצלמה (לא ס״מ). "יחסי לאורך הרגל" משתמש באורך הרגל התומכת שלכם כיחידת מידה, כדי לאפשר השוואה גסה בין בעיטות גם אם המרחק מהמצלמה משתנה מעט.';
+
+  // playback
+  document.getElementById('playBtn').onclick = ()=> playback(footX,footY,ts,mapPt,ctx,W,H,kneeX,kneeY,hipX,hipY,speeds,maxSpd);
+}
+
+function redrawStatic(ctx,W,H,footX,footY,kneeX,kneeY,hipX,hipY,mapPt,speeds,maxSpd){
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle = 'rgba(43,58,103,0.28)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  kneeX.forEach((x,i)=>{ const p=mapPt(x,kneeY[i]); i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y); });
+  ctx.stroke();
+  const hipP = mapPt(hipX[0], hipY[0]);
+  ctx.fillStyle='rgba(18,18,18,0.35)';
+  ctx.beginPath(); ctx.arc(hipP.x,hipP.y,4,0,7); ctx.fill();
+}
+
+function playback(footX,footY,ts,mapPt,ctx,W,H,kneeX,kneeY,hipX,hipY,speeds,maxSpd){
+  const start = performance.now();
+  const total = ts[ts.length-1];
+  function step(){
+    const elapsed = performance.now()-start;
+    redrawStatic(ctx,W,H,footX,footY,kneeX,kneeY,hipX,hipY,mapPt,speeds,maxSpd);
+    // draw path up to elapsed
+    let i=1;
+    while(i<ts.length && ts[i]<=elapsed) i++;
+    for(let k=1;k<i;k++){
+      const p0=mapPt(footX[k-1],footY[k-1]), p1=mapPt(footX[k],footY[k]);
+      const wgt = 1.5 + 6*(speeds[k]/maxSpd);
+      ctx.strokeStyle='#2B3A67'; ctx.lineWidth=wgt; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke();
+    }
+    if(i<ts.length){
+      const p = mapPt(footX[i-1],footY[i-1]);
+      ctx.fillStyle='#B23A2E';
+      ctx.beginPath(); ctx.arc(p.x,p.y,6,0,7); ctx.fill();
+    }
+    if(elapsed < total){
+      requestAnimationFrame(step);
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+document.getElementById('closeResults').addEventListener('click', resetToCalibrate);
+document.getElementById('retryBtn').addEventListener('click', resetToCalibrate);
+
+function resetToCalibrate(){
+  document.getElementById('results').classList.remove('show');
+  phase = 'calibrate';
+  stableSince = null;
+  stabilityBuffer = [];
+  setState('כיול');
+  hintEl.style.display='';
+}
+
+// ---------- Main detection loop ----------
+async function detectLoop(){
+  if(!running) return;
+  if(video.readyState >= 2 && poseLandmarker){
+    resizeCanvas();
+    const w = overlay.width, h = overlay.height;
+    const now = performance.now();
+    const result = poseLandmarker.detectForVideo(video, now);
+    if(result.landmarks && result.landmarks.length){
+      const lm = result.landmarks[0];
+
+      if(phase==='calibrate'){
+        const cal = evaluateCalibration(lm, w, h);
+        drawSkeleton(lm, w, h, cal.ok);
+        hintEl.textContent = cal.msg;
+        hintEl.classList.toggle('good', cal.ok);
+        onCalibrationTick(cal.ok);
+      } else if(phase==='countdown'){
+        drawSkeleton(lm, w, h, true);
+      } else if(phase==='recording'){
+        drawSkeleton(lm, w, h, true);
+        recordFrame(lm, w, h);
+      } else {
+        drawSkeleton(lm, w, h, false);
+      }
+    } else {
+      octx.clearRect(0,0,w,h);
+      if(phase==='calibrate'){
+        hintEl.textContent = 'לא רואה אתכם — היכנסו לפריים';
+        hintEl.classList.remove('good');
+      }
+    }
+  }
+  requestAnimationFrame(detectLoop);
+}
+
+// ---------- Startup ----------
+async function init(){
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:720} },
+    audio:true
+  });
+  video.srcObject = stream;
+  await new Promise(res=> video.onloadedmetadata = res);
+  await video.play();
+  resizeCanvas();
+
+  const vision = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions:{
+      modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+      delegate:"GPU"
+    },
+    runningMode:"VIDEO",
+    numPoses:1
+  });
+
+  running = true;
+  phase = 'calibrate';
+  setState('כיול');
+  requestAnimationFrame(detectLoop);
+}
+
+startBtn.addEventListener('click', async ()=>{
+  permOverlay.style.display='none';
+  try{
+    await init();
+  }catch(e){
+    permOverlay.style.display='flex';
+    permOverlay.innerHTML = `<h1>שגיאה</h1><p>${e.message || 'לא ניתן לגשת למצלמה/מיקרופון'}</p>`;
+  }
+});
+</script>
+</body>
+</html>
