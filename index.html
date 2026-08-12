@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MyGeri v1.4 — מעקב מסלול בעיטות</title>
+<title>MyGeri v1.5 — מעקב מסלול בעיטות</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -191,6 +191,30 @@
     border-radius:24px; padding:12px; font-family:'Heebo'; font-size:14px; font-weight:600;
   }
 
+  #sessionGallery{ display:none; margin:6px 16px 18px; }
+  .galleryLabel{ font-size:12px; color:var(--muted); margin-bottom:8px; }
+  .galleryRow{ display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; }
+  .galleryThumb{
+    width:66px; height:66px; object-fit:cover; border-radius:12px; flex-shrink:0;
+    border:1.5px solid rgba(18,18,18,.15);
+  }
+  .galleryThumb.current{ border-color:var(--indigo); border-width:2px; }
+
+  #lightbox{
+    position:fixed; inset:0; background:rgba(10,10,10,0.94); z-index:60;
+    display:none; align-items:center; justify-content:center; flex-direction:column; gap:18px; padding:24px;
+  }
+  #lightbox.show{ display:flex; }
+  #lightboxImg{ max-width:100%; max-height:70vh; border-radius:14px; }
+  #lightboxClose{
+    position:absolute; top:20px; left:20px; background:rgba(255,255,255,0.12); color:var(--paper);
+    border:none; width:38px; height:38px; border-radius:50%; font-size:16px;
+  }
+  #lightboxShare{
+    background:var(--gold); color:var(--ink); border:none; border-radius:24px;
+    padding:13px 28px; font-family:'Heebo'; font-size:15px; font-weight:700;
+  }
+
   #permOverlay{position:fixed; inset:0; background:var(--ink); display:flex; align-items:center;
     justify-content:center; flex-direction:column; gap:16px; z-index:50; padding:30px; text-align:center;}
   #permOverlay button{background:var(--indigo); color:var(--paper); border:none; border-radius:24px;
@@ -252,11 +276,18 @@
   <div id="jointLegend"></div>
   <div id="stats"></div>
   <div id="norm"></div>
+  <div id="sessionGallery"></div>
   <button id="retryBtn">בעיטה נוספת</button>
 </div>
 
+<div id="lightbox">
+  <button id="lightboxClose">✕</button>
+  <img id="lightboxImg" alt="בעיטה">
+  <button id="lightboxShare">📤 שתפו בוואטסאפ</button>
+</div>
+
 <div id="permOverlay">
-  <h1>MyGeri <span class="mono" style="font-size:10px; opacity:.5;">v1.4</span></h1>
+  <h1>MyGeri <span class="mono" style="font-size:10px; opacity:.5;">v1.5</span></h1>
   <p style="margin-top:-10px; font-size:15px; color:var(--paper); opacity:.75;">מעקב מסלול בעיטות</p>
   <p>נדרשת גישה למצלמה (לזיהוי שלד) ולמיקרופון (לעצירה קולית ב"עצור"). עמדו בפרופיל למצלמה, במרחק שבו כל הגוף נראה.</p>
   <button id="startBtn">התחל</button>
@@ -285,7 +316,7 @@ const stateLabel = document.getElementById('stateLabel');
 const hintEl = document.getElementById('hint');
 const bigSignalEl = document.getElementById('bigSignal');
 const bigSignalIcon = bigSignalEl.querySelector('.icon');
-const BIG_SIGNAL_ICONS = { closer:'↑', farther:'↓', turn:'↻', ok:'✓' };
+const BIG_SIGNAL_ICONS = { closer:'↑', farther:'↓', turn:'↻', edge:'↔', ok:'✓' };
 function setBigSignal(signal){
   if(!signal){ bigSignalEl.classList.remove('show'); return; }
   bigSignalIcon.textContent = BIG_SIGNAL_ICONS[signal] || '';
@@ -428,6 +459,7 @@ function resizeCanvas(){
 // ---------- Calibration logic ----------
 // Facing the camera (frontal) → we can only reliably read lateral motion, so that's side-kick mode.
 // Standing side-on (profile) → we can read forward/backward motion, so front-kick or back-kick mode.
+// Both stances are valid on their own — we never ask the person to "turn around" to satisfy this check.
 function evaluateCalibration(lm, w, h){
   const lHip = pt(lm,L.L_HIP,w,h), rHip = pt(lm,L.R_HIP,w,h);
   const lAnkle = pt(lm,L.L_ANKLE,w,h), rAnkle = pt(lm,L.R_ANKLE,w,h);
@@ -446,10 +478,19 @@ function evaluateCalibration(lm, w, h){
   if(ratio < 0.20) return {ok:false, msg:'התקרבו למצלמה', signal:'closer'};
   if(ratio > 0.75) return {ok:false, msg:'התרחקו מהמצלמה', signal:'farther'};
 
+  // Hysteresis around the frontal/profile split so it doesn't flicker — but always
+  // resolves to ONE of the two; it never rejects the person for being "in between".
   let stance;
-  if(profileRatio > 0.50) stance = 'frontal';
-  else if(profileRatio < 0.32) stance = 'profile';
-  else return {ok:false, msg:'עמדו בבירור בחזית או בפרופיל למצלמה', stance:null, signal:'turn'};
+  if(currentStance === 'frontal') stance = profileRatio > 0.37 ? 'frontal' : 'profile';
+  else if(currentStance === 'profile') stance = profileRatio < 0.45 ? 'profile' : 'frontal';
+  else stance = profileRatio > 0.41 ? 'frontal' : 'profile';
+
+  // Frame-edge check: if you're centered, the kicking leg often swings out of frame.
+  // Standing near either edge leaves room for the kick, regardless of which side.
+  const hipXRatio = ((lHip.x+rHip.x)/2) / w;
+  if(hipXRatio > 0.32 && hipXRatio < 0.68){
+    return {ok:false, msg:'זוזו לקצה הפריים (ימין או שמאל) — כדי שהבעיטה לא תצא מהתמונה', signal:'edge', stance};
+  }
 
   return {ok:true, msg: stance==='frontal' ? 'עמידה חזיתית — בודקים בעיטה צידית' : 'עמידה בפרופיל — בחרו בעיטה קדמית/אחורית', hipY, legPx, stance, signal:'ok'};
 }
@@ -625,6 +666,21 @@ function chooseKickingLeg(){
   return rR > rL ? 'R' : 'L';
 }
 
+// Picks whichever wrist traveled farther in total — vertical range alone (used for the leg)
+// doesn't work well for punches, which move mostly forward/sideways rather than up/down.
+function chooseStrikingArm(){
+  const pathLen = key => {
+    let total=0;
+    for(let i=1;i<frames.length;i++){
+      const a=frames[i-1].full[key], b=frames[i].full[key];
+      total += Math.hypot(b.x-a.x, b.y-a.y);
+    }
+    return total;
+  };
+  const lLen = pathLen('wrL'), rLen = pathLen('wrR');
+  return rLen > lLen ? 'R' : 'L';
+}
+
 function smooth(arr, win=3){
   const out=[];
   for(let i=0;i<arr.length;i++){
@@ -642,12 +698,20 @@ const JOINT_COLORS = {
   hip:  '#5A5A54', // muted ink — pelvis reference
   knee: '#2B3A67', // indigo
   ankle:'#B23A2E', // vermilion
-  foot: '#C9A227'  // gold
+  foot: '#C9A227', // gold
+  shoulder:'#3E7C59', // forest green
+  elbow:'#7A4EA0',    // violet
+  wrist:'#C1622E',    // burnt orange
+  head:'#A85C7A'      // mauve
 };
-const JOINT_LABELS = { hip:'אגן', knee:'ברך', ankle:'קרסול', foot:'כף רגל' };
-const JOINT_ORDER = ['hip','knee','ankle','foot'];
+const JOINT_LABELS = { hip:'אגן', knee:'ברך', ankle:'קרסול', foot:'כף רגל',
+  shoulder:'כתף', elbow:'מרפק', wrist:'שורש כף יד', head:'ראש' };
+const JOINT_ORDER = ['hip','knee','ankle','foot','shoulder','elbow','wrist','head'];
 let lastResultData = null;
-let visibleJoints = { hip:true, knee:true, ankle:true, foot:true, skeleton:true };
+// Default view: only the skeleton snapshot is on — tap a joint chip to reveal its colored path.
+let visibleJoints = { hip:false, knee:false, ankle:false, foot:false,
+  shoulder:false, elbow:false, wrist:false, head:false, skeleton:true };
+
 
 function showResults(){
   document.getElementById('results').classList.add('show');
@@ -660,14 +724,20 @@ function showResults(){
   document.getElementById('trajWrap').style.display='';
 
   const side = chooseKickingLeg();
+  const armSide = chooseStrikingArm();
   document.getElementById('legUsed').textContent =
     KICK_TYPE_LABELS[frozenKickType] + ' — רגל בועטת: ' + (side==='L'?'שמאל':'ימין');
 
+  const armKey = { shoulder: armSide==='L'?'shL':'shR', elbow: armSide==='L'?'elL':'elR', wrist: armSide==='L'?'wrL':'wrR' };
   const raw = {
     hip:   { x: frames.map(f=>f.hip.x),        y: frames.map(f=>f.hip.y) },
     knee:  { x: frames.map(f=>f[side].knee.x),  y: frames.map(f=>f[side].knee.y) },
     ankle: { x: frames.map(f=>f[side].ankle.x), y: frames.map(f=>f[side].ankle.y) },
     foot:  { x: frames.map(f=>f[side].foot.x),  y: frames.map(f=>f[side].foot.y) },
+    shoulder: { x: frames.map(f=>f.full[armKey.shoulder].x), y: frames.map(f=>f.full[armKey.shoulder].y) },
+    elbow:    { x: frames.map(f=>f.full[armKey.elbow].x),    y: frames.map(f=>f.full[armKey.elbow].y) },
+    wrist:    { x: frames.map(f=>f.full[armKey.wrist].x),    y: frames.map(f=>f.full[armKey.wrist].y) },
+    head:     { x: frames.map(f=>f.full.nose.x),              y: frames.map(f=>f.full.nose.y) },
   };
   const jd = {}; // smoothed joint data
   Object.keys(raw).forEach(k=> jd[k] = { x: smooth(raw[k].x), y: smooth(raw[k].y) });
@@ -703,10 +773,12 @@ function showResults(){
   const peakIdx = jd.foot.y.indexOf(minFootY);
   const endIdx = frames.length - 1;
 
-  visibleJoints = { hip:true, knee:true, ankle:true, foot:true, skeleton:true };
-  lastResultData = { jd, ts, side, peakIdx, peakExtIdx, endIdx, maxKneeAngle, framesRef: frames.slice() };
+  visibleJoints = { hip:false, knee:false, ankle:false, foot:false,
+    shoulder:false, elbow:false, wrist:false, head:false, skeleton:true };
+  lastResultData = { jd, ts, side, armSide, peakIdx, peakExtIdx, endIdx, maxKneeAngle, framesRef: frames.slice() };
   renderJointLegend();
   drawDiagram();
+  addToGallery(document.getElementById('trajCanvas').toDataURL('image/png'));
 
   const stats = [
     { v:(totalMs/1000).toFixed(2), u:'s', l:'משך הבעיטה' },
@@ -744,8 +816,8 @@ function drawDiagram(){
 
   // fit ALL joint paths + all skeleton snapshot points into the canvas (always, so
   // toggling any layer on/off never rescales or shifts the view)
-  const allX = [].concat(jd.hip.x, jd.knee.x, jd.ankle.x, jd.foot.x);
-  const allY = [].concat(jd.hip.y, jd.knee.y, jd.ankle.y, jd.foot.y);
+  const allX = [], allY = [];
+  JOINT_ORDER.forEach(j=>{ allX.push(...jd[j].x); allY.push(...jd[j].y); });
   [0, peakExtIdx, endIdx].forEach(idx=>{
     const f = framesRef[idx].full;
     Object.values(f).forEach(p=>{ allX.push(p.x); allY.push(p.y); });
@@ -879,7 +951,59 @@ function renderJointLegend(){
   });
 }
 
-document.getElementById('closeResults').addEventListener('click', resetToCalibrate);
+// ---------- Session album ----------
+let sessionGallery = []; // {dataUrl, id}
+function addToGallery(dataUrl){
+  sessionGallery.push({ dataUrl, id: Date.now() });
+  renderGallery();
+}
+function renderGallery(){
+  const el = document.getElementById('sessionGallery');
+  if(sessionGallery.length === 0){ el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const current = sessionGallery.length - 1;
+  el.innerHTML = '<div class="galleryLabel">אלבום הסשן (' + sessionGallery.length + ')</div><div class="galleryRow">' +
+    sessionGallery.map((g,i)=>`<img class="galleryThumb${i===current?' current':''}" data-idx="${i}" src="${g.dataUrl}">`).join('') +
+    '</div>';
+  el.querySelectorAll('.galleryThumb').forEach(img=>{
+    img.addEventListener('click', ()=> openLightbox(parseInt(img.dataset.idx)));
+  });
+  // scroll the newest thumbnail into view
+  const row = el.querySelector('.galleryRow');
+  if(row) row.scrollLeft = row.scrollWidth;
+}
+
+const lightboxEl = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightboxImg');
+function openLightbox(idx){
+  const g = sessionGallery[idx];
+  if(!g) return;
+  lightboxImg.src = g.dataUrl;
+  lightboxEl.classList.add('show');
+  document.getElementById('lightboxShare').onclick = ()=> shareImage(g.dataUrl, idx);
+}
+document.getElementById('lightboxClose').addEventListener('click', ()=> lightboxEl.classList.remove('show'));
+
+// Shares via the native share sheet (navigator.share with a file) — on phones this includes
+// WhatsApp as one of the apps offered, since there's no way to push an image straight into a
+// WhatsApp chat from a web page without that OS-level share sheet.
+async function shareImage(dataUrl, idx){
+  try{
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    const file = new File([blob], `mygeri-kick-${idx+1}.png`, {type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({ files:[file], title:'MyGeri — מסלול בעיטה' });
+    } else {
+      window.open(dataUrl, '_blank');
+      toast('פתחנו את התמונה בכרטיסייה חדשה — שמרו ושתפו משם');
+    }
+  }catch(e){
+    if(e && e.name === 'AbortError') return; // person cancelled the share sheet
+    window.open(dataUrl, '_blank');
+    toast('פתחנו את התמונה בכרטיסייה חדשה — שמרו ושתפו משם');
+  }
+}
 document.getElementById('retryBtn').addEventListener('click', resetToCalibrate);
 
 function resetToCalibrate(){
