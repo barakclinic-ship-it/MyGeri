@@ -85,6 +85,15 @@
   #micNote{position:absolute; top:60px; left:18px; font-size:11px; color:var(--muted); max-width:150px; opacity:0;}
   #micNote.on{opacity:1;}
 
+  #camError{
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    flex-direction:column; gap:14px; background:var(--ink); z-index:15; padding:30px; text-align:center;
+  }
+  #camError.show{display:flex;}
+  #camError p{color:var(--muted); font-size:13px; max-width:280px; line-height:1.7;}
+  #camError button{background:var(--indigo); color:var(--paper); border:none; border-radius:24px;
+    padding:12px 28px; font-family:'Heebo'; font-size:15px; font-weight:600;}
+
   /* ---------- Results ---------- */
   #results{
     position:fixed; inset:0; background:var(--paper); color:var(--ink);
@@ -146,6 +155,11 @@
     <div id="timer" class="mono">0.0s</div>
     <button id="stopBtn">✋ עצור</button>
     <div id="micNote"></div>
+    <div id="camError">
+      <h1 style="font-size:18px;margin:0;">המצלמה לא הופעלה</h1>
+      <p id="camErrorMsg">לא הצלחנו להריץ את הווידאו.</p>
+      <button id="tapToPlay">הקש להפעלה</button>
+    </div>
   </div>
 </div>
 
@@ -198,6 +212,9 @@ const permOverlay = document.getElementById('permOverlay');
 const startBtn = document.getElementById('startBtn');
 const camSwitch = document.getElementById('camSwitch');
 const camLabel = document.getElementById('camLabel');
+const camError = document.getElementById('camError');
+const camErrorMsg = document.getElementById('camErrorMsg');
+const tapToPlay = document.getElementById('tapToPlay');
 
 let poseLandmarker = null;
 let running = false;
@@ -696,20 +713,68 @@ async function detectLoop(){
 
 // ---------- Startup ----------
 async function openCamera(mode){
+  camError.classList.remove('show');
   if(currentStream){
     currentStream.getTracks().forEach(t=>t.stop());
   }
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video:{ facingMode:{ideal:mode}, width:{ideal:1280}, height:{ideal:720} },
-    audio:true
-  });
+  let stream;
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:{ideal:mode}, width:{ideal:1280}, height:{ideal:720} },
+      audio:true
+    });
+  }catch(e){
+    showCamError('לא ניתן לגשת למצלמה: ' + (e.message || e.name || 'שגיאה לא ידועה'));
+    throw e;
+  }
   currentStream = stream;
   video.srcObject = stream;
+  video.muted = true;
+  video.playsInline = true;
   video.classList.toggle('mirrored', mode === 'user');
-  await new Promise(res=> video.onloadedmetadata = res);
-  await video.play();
+
+  await new Promise((res)=>{
+    if(video.readyState >= 1) return res();
+    video.onloadedmetadata = res;
+  });
+
+  try{
+    await video.play();
+  }catch(e){
+    // Autoplay blocked — surface a tap-to-play fallback instead of a silent black screen
+    showCamError('הדפדפן חוסם הפעלה אוטומטית של הווידאו. הקישו למטה כדי להפעיל.', true);
+  }
+
   resizeCanvas();
+
+  // verify frames are actually arriving; if not, surface an error rather than staying black
+  await new Promise(r=>setTimeout(r, 700));
+  if(video.videoWidth === 0 || video.videoHeight === 0){
+    showCamError('התקבלה הרשאה אך לא מתקבלת תמונה מהמצלמה. נסו לרענן, או להחליף דפדפן (מומלץ Chrome).');
+  }
 }
+
+function showCamError(msg, tapOnly){
+  camErrorMsg.textContent = msg;
+  camError.classList.add('show');
+  tapToPlay.style.display = tapOnly ? '' : 'none';
+  if(!tapOnly){
+    tapToPlay.style.display = '';
+    tapToPlay.textContent = 'נסה שוב';
+  } else {
+    tapToPlay.textContent = 'הקש להפעלה';
+  }
+}
+
+tapToPlay.addEventListener('click', async ()=>{
+  camError.classList.remove('show');
+  try{
+    await video.play();
+    resizeCanvas();
+  }catch(e){
+    try{ await openCamera(facingMode); }catch(_){}
+  }
+});
 
 async function init(mode){
   facingMode = mode;
@@ -741,6 +806,7 @@ async function startWith(mode){
   try{
     await init(mode);
   }catch(e){
+    if(camError.classList.contains('show')) return; // in-stage error banner already explains it
     permOverlay.style.display='flex';
     permOverlay.innerHTML = `<h1>שגיאה</h1><p>${e.message || 'לא ניתן לגשת למצלמה/מיקרופון'}</p>`;
   }
