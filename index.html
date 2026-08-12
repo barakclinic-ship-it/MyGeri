@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MyGeri v1.1 — מעקב מסלול בעיטות</title>
+<title>MyGeri v1.2 — מעקב מסלול בעיטות</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -111,6 +111,14 @@
   #camError button{background:var(--indigo); color:var(--paper); border:none; border-radius:24px;
     padding:12px 28px; font-family:'Heebo'; font-size:15px; font-weight:600;}
 
+  #toast{
+    position:absolute; left:50%; top:70px; transform:translateX(-50%);
+    background:rgba(18,18,18,0.85); color:var(--paper); font-size:13px;
+    padding:9px 18px; border-radius:14px; z-index:22; opacity:0; transition:opacity .25s;
+    max-width:80%; text-align:center;
+  }
+  #toast.show{opacity:1;}
+
   /* ---------- Results ---------- */
   #results{
     position:fixed; inset:0; background:var(--paper); color:var(--ink);
@@ -176,6 +184,7 @@
     <div id="micNote"></div>
     <div id="liveTranscript" class="mono"></div>
     <div id="stopFlash">⏹ עצירה</div>
+    <div id="toast"></div>
     <button id="camSwitch" title="החלף מצלמה" aria-label="החלף מצלמה">
       <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
         <path d="M17 2l3 3-3 3"/>
@@ -208,7 +217,7 @@
 </div>
 
 <div id="permOverlay">
-  <h1>MyGeri <span class="mono" style="font-size:14px; opacity:.6;">v1.1</span></h1>
+  <h1>MyGeri <span class="mono" style="font-size:10px; opacity:.5;">v1.2</span></h1>
   <p style="margin-top:-10px; font-size:15px; color:var(--paper); opacity:.75;">מעקב מסלול בעיטות</p>
   <p>נדרשת גישה למצלמה (לזיהוי שלד) ולמיקרופון (לעצירה קולית ב"עצור"). עמדו בפרופיל למצלמה, במרחק שבו כל הגוף נראה.</p>
   <button id="startBtn">התחל</button>
@@ -239,6 +248,13 @@ const stopBtn = document.getElementById('stopBtn');
 const micNote = document.getElementById('micNote');
 const liveTranscript = document.getElementById('liveTranscript');
 const stopFlash = document.getElementById('stopFlash');
+const toastEl = document.getElementById('toast');
+function toast(msg, ms){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=> toastEl.classList.remove('show'), ms||2200);
+}
 const permOverlay = document.getElementById('permOverlay');
 const startBtn = document.getElementById('startBtn');
 const camSwitch = document.getElementById('camSwitch');
@@ -799,28 +815,37 @@ async function detectLoop(){
 }
 
 // ---------- Startup ----------
-async function openCamera(mode){
-  camError.classList.remove('show');
-  let stream;
-  try{
-    stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:{ideal:mode}, width:{ideal:1280}, height:{ideal:720} },
-      audio:false // mic is handled separately by SpeechRecognition — sharing the track can block voice-stop on some devices
-    });
-  }catch(e){
-    showCamError('לא ניתן לגשת למצלמה: ' + (e.message || e.name || 'שגיאה לא ידועה'));
-    throw e;
-  }
-  // only tear down the previous (working) stream once the new one is confirmed —
-  // otherwise a failed switch (e.g. device has no front camera) left a black screen
-  if(currentStream){
-    currentStream.getTracks().forEach(t=>t.stop());
-  }
+async function acquireCamera(mode){
+  return navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:{ideal:mode}, width:{ideal:1280}, height:{ideal:720} },
+    audio:false // mic is handled separately by SpeechRecognition — sharing the track can block voice-stop on some devices
+  });
+}
+
+function attachStream(stream, mode){
   currentStream = stream;
   video.srcObject = stream;
   video.muted = true;
   video.playsInline = true;
   video.classList.toggle('mirrored', mode === 'user');
+}
+
+async function openCamera(mode){
+  camError.classList.remove('show');
+  // Most phones only allow one active camera stream at a time, so release the
+  // current one before requesting the next — otherwise the new request just fails.
+  if(currentStream){
+    currentStream.getTracks().forEach(t=>t.stop());
+    currentStream = null;
+  }
+  let stream;
+  try{
+    stream = await acquireCamera(mode);
+  }catch(e){
+    showCamError('לא ניתן לגשת למצלמה: ' + (e.message || e.name || 'שגיאה לא ידועה'));
+    throw e;
+  }
+  attachStream(stream, mode);
 
   await new Promise((res)=>{
     if(video.readyState >= 1) return res();
@@ -905,13 +930,24 @@ startBtn.addEventListener('click', ()=> startWith('environment'));
 camSwitch.addEventListener('click', async ()=>{
   if(phase==='recording' || phase==='countdown') return; // don't allow mid-kick
   camSwitch.disabled = true;
+  const previous = facingMode;
   const next = facingMode === 'user' ? 'environment' : 'user';
   try{
     await openCamera(next);
     facingMode = next; // only commit once the switch actually succeeded
     stableSince = null; stabilityBuffer = [];
   }catch(e){
-    // openCamera already surfaced a clear error panel; the previous camera keeps running
+    // the requested camera failed (e.g. no front camera on this device) — fall back
+    // to reopening the previous one automatically instead of leaving the screen dead
+    try{
+      await openCamera(previous);
+      facingMode = previous;
+      camError.classList.remove('show');
+      toast('למכשיר הזה אין ' + (next==='user' ? 'מצלמה קדמית' : 'מצלמה אחורית') + ' זמינה');
+      stableSince = null; stabilityBuffer = [];
+    }catch(e2){
+      // both failed — the error panel from openCamera(previous) already explains it
+    }
   }
   camSwitch.disabled = false;
 });
