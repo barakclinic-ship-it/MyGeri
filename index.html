@@ -1812,4 +1812,236 @@ async function detectLoop(){
     if(video.readyState < 2){
       hintEl.textContent = 'טוען וידאו מהמצלמה...';
     } else if(!poseLandmarker){
-      hintEl.textContent = 'טוע
+      hintEl.textContent = 'טוען מודל זיהוי תנועה...';
+    }
+  }
+  }catch(e){
+    console.error('detectLoop frame error:', e);
+  }
+  requestAnimationFrame(detectLoop);
+}
+
+// ---------- Startup ----------
+async function acquireCamera(mode){
+  return navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:{ideal:mode}, width:{ideal:1280}, height:{ideal:720} },
+    audio:false // mic is handled separately by SpeechRecognition — sharing the track can block voice-stop on some devices
+  });
+}
+
+function attachStream(stream, mode){
+  currentStream = stream;
+  video.srcObject = stream;
+  video.muted = true;
+  video.playsInline = true;
+  video.classList.toggle('mirrored', mode === 'user');
+}
+
+let cameraReleasedAt = 0;
+function releaseCamera(){
+  if(currentStream){
+    currentStream.getTracks().forEach(t=>t.stop());
+    currentStream = null;
+  }
+  // On some Android/Chrome builds, stopping the tracks alone doesn't fully release
+  // the camera hardware until the <video> element's srcObject reference is cleared too.
+  video.srcObject = null;
+  cameraReleasedAt = performance.now();
+}
+
+async function openCamera(mode){
+  camError.classList.remove('show');
+  // Most phones only allow one active camera stream at a time, so release the
+  // current one before requesting the next — otherwise the new request just fails.
+  if(currentStream) releaseCamera();
+  // Whoever released the previous stream (here, or the back button) recorded when —
+  // wait out the remainder of a safety window so we don't request a new stream while
+  // the camera hardware is still mid-release on devices that need a moment.
+  const sinceRelease = performance.now() - cameraReleasedAt;
+  const minGap = 500;
+  if(sinceRelease < minGap){
+    await new Promise(r=>setTimeout(r, minGap - sinceRelease));
+  }
+  let stream, lastErr;
+  const delays = [0, 600, 1200, 2000]; // several attempts with increasing backoff — camera release timing varies a lot by device
+  for(const d of delays){
+    if(d) await new Promise(r=>setTimeout(r, d));
+    try{
+      stream = await acquireCamera(mode);
+      lastErr = null;
+      break;
+    }catch(e){ lastErr = e; }
+  }
+  if(!stream){
+    showCamError('לא ניתן לגשת למצלמה (' + (lastErr?.name || 'שגיאה') + '): ' + (lastErr?.message || 'לא ידועה'));
+    throw lastErr;
+  }
+  attachStream(stream, mode);
+
+  await new Promise((res)=>{
+    if(video.readyState >= 1) return res();
+    video.onloadedmetadata = res;
+  });
+
+  try{
+    await video.play();
+  }catch(e){
+    // Autoplay blocked — surface a tap-to-play fallback instead of a silent black screen
+    showCamError('הדפדפן חוסם הפעלה אוטומטית של הווידאו. הקישו למטה כדי להפעיל.', true);
+  }
+
+  resizeCanvas();
+
+  // Verify a real decoded frame is actually available — videoWidth/videoHeight alone
+  // aren't proof, since browsers often set those from stream metadata before any frame
+  // is truly decoded. readyState >= 2 (HAVE_CURRENT_DATA) means a frame is really ready.
+  await Promise.race([
+    new Promise(res=>{
+      if(video.readyState >= 2) return res();
+      video.addEventListener('loadeddata', res, {once:true});
+    }),
+    new Promise(res=>setTimeout(res, 2500))
+  ]);
+  if(video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0){
+    showCamError('התקבלה הרשאה אך לא מתקבלת תמונה מהמצלמה (מצב: ' + video.readyState + '). נסו לרענן, או להחליף דפדפן (מומלץ Chrome).');
+  }
+}
+
+function showCamError(msg, tapOnly){
+  camErrorMsg.textContent = msg;
+  camError.classList.add('show');
+  tapToPlay.style.display = tapOnly ? '' : 'none';
+  if(!tapOnly){
+    tapToPlay.style.display = '';
+    tapToPlay.textContent = 'נסה שוב';
+  } else {
+    tapToPlay.textContent = 'הקש להפעלה';
+  }
+}
+
+tapToPlay.addEventListener('click', async ()=>{
+  camError.classList.remove('show');
+  try{
+    await video.play();
+    resizeCanvas();
+  }catch(e){
+    try{ await openCamera(facingMode); }catch(_){}
+  }
+});
+
+async function init(mode){
+  recBorder.classList.remove('on');
+  timerEl.classList.remove('on');
+  stopBtn.classList.remove('on');
+  document.getElementById('startInstruction').classList.remove('show');
+  facingMode = mode;
+  await openCamera(mode);
+  document.getElementById('startupLoadingText').textContent = 'טוען מודל זיהוי תנועה...';
+
+  if(!poseLandmarker){
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+    poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+      baseOptions:{
+        modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+        delegate:"GPU"
+      },
+      runningMode:"VIDEO",
+      numPoses:1
+    });
+  }
+
+  running = true;
+  phase = 'calibrate';
+  setState('');
+  requestAnimationFrame(detectLoop);
+}
+
+async function startWith(mode){
+  permOverlay.style.display='none';
+  const loadingEl = document.getElementById('startupLoading');
+  const loadingTextEl = document.getElementById('startupLoadingText');
+  loadingTextEl.textContent = 'פותח מצלמה...';
+  loadingEl.classList.add('show');
+  try{
+    await init(mode);
+  }catch(e){
+    if(camError.classList.contains('show')) return; // in-stage error banner already explains it
+    permOverlay.style.display='flex';
+    permOverlay.innerHTML = `<h1>שגיאה</h1><p>${e.message || 'לא ניתן לגשת למצלמה'}</p>`;
+  } finally {
+    loadingEl.classList.remove('show');
+  }
+}
+
+document.getElementById('backBtn').addEventListener('click', ()=>{
+  running = false;
+  releaseCamera();
+  cancelAnimationFrame(animRAF); animRAF = null;
+  clearTimeout(recordingAutoStopTimer);
+  recBorder.classList.remove('on');
+  timerEl.classList.remove('on');
+  stopBtn.classList.remove('on');
+  document.getElementById('startInstruction').classList.remove('show');
+  phase = 'idle';
+  currentStance = null;
+  kickTypeChoice.classList.remove('show');
+  setBigSignal(null);
+  permOverlay.style.display = 'flex';
+});
+
+startBtn.addEventListener('click', ()=> startWith('environment'));
+
+camSwitch.addEventListener('click', async ()=>{
+  if(phase==='recording' || phase==='countdown') return; // don't allow mid-kick
+  camSwitch.disabled = true;
+  const previous = facingMode;
+  const next = facingMode === 'user' ? 'environment' : 'user';
+  try{
+    await openCamera(next);
+    facingMode = next; // only commit once the switch actually succeeded
+    stableSince = null; stabilityBuffer = [];
+  }catch(e){
+    // the requested camera failed — fall back to reopening the previous one
+    // automatically instead of leaving the screen dead
+    const noSuchDevice = e && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError');
+    try{
+      await openCamera(previous);
+      facingMode = previous;
+      camError.classList.remove('show');
+      toast(noSuchDevice
+        ? 'למכשיר הזה אין ' + (next==='user' ? 'מצלמה קדמית' : 'מצלמה אחורית') + ' זמינה'
+        : 'החלפה נכשלה: ' + (e?.name || 'שגיאה') + ' — ' + (e?.message || ''), 4500);
+      stableSince = null; stabilityBuffer = [];
+    }catch(e2){
+      // both failed — the error panel from openCamera(previous) already explains it
+    }
+  }
+  camSwitch.disabled = false;
+});
+
+function updateCamSwitchVisibility(){
+  camSwitch.classList.toggle('hidden', phase==='recording' || phase==='countdown');
+}
+</script>
+<script>
+setTimeout(function(){
+  if(!window.__tpModuleLoaded){
+    document.body.innerHTML =
+      '<div style="position:fixed;inset:0;background:#121212;color:#EDE7DA;display:flex;' +
+      'flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;' +
+      'font-family:sans-serif;gap:16px;">' +
+      '<h1 style="font-size:20px;margin:0;">האפליקציה לא נטענה</h1>' +
+      '<p style="font-size:14px;line-height:1.7;max-width:320px;color:#B8B2A5;">' +
+      'ספריה חיצונית שהאפליקציה צריכה (לזיהוי תנועה) לא הצליחה להיטען — ' +
+      'כנראה בגלל חסימת רשת (חברת הסלולר/ה-WiFi), VPN, או חוסם פרסומות.' +
+      '<br><br>נסו: לכבות VPN/חוסם פרסומות, לעבור לרשת אחרת (WiFi↔סלולרי), ואז לרענן.</p>' +
+      '<button onclick="location.reload()" style="background:#C9A227;color:#121212;border:none;' +
+      'border-radius:24px;padding:13px 26px;font-size:15px;font-weight:700;">רענן שוב</button>' +
+      '</div>';
+  }
+}, 5000);
+</script>
+</body>
+</html>
